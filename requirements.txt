@@ -1,0 +1,17 @@
+# Core pipeline (Phases A-B)
+mediapipe>=0.10.14
+opencv-python>=4.9
+numpy>=1.26,<2.3
+
+# Evaluation harness (Phase H) — Penn Action .mat labels + plots
+scipy>=1.11
+matplotlib>=3.7
+
+# API server (Phase E)
+fastapi>=0.110
+uvicorn[standard]>=0.27
+python-multipart>=0.0.9
+
+# Phase D voice transcription is optional and NOT installed by default
+# (pulls in torch ~2GB). Enable with:
+#   pip install openai-whisper
