@@ -54,6 +54,17 @@ curl -F "video=@data\test_videos\squat.mp4" ^
 
 Returns JSON with URLs to artefacts served from `/results/<job_id>/`.
 
+### Tests
+
+```
+.venv\Scripts\python.exe -m pytest
+```
+
+51 tests: angle maths vs known geometry, One Euro behaviour, phase detection on
+synthetic signals, rep filter, cue gating, and an end-to-end smoke test (the
+smoke test needs `data\test_videos\squat.mp4` and skips itself on a clean
+checkout, where test videos are gitignored).
+
 ### Pexels fixture fetcher
 
 ```
