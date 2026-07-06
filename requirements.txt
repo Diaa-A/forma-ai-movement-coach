@@ -1,17 +1,24 @@
+# Pinned to the versions this project was built and validated against
+# (Python 3.13 — see README for why not 3.11).
+
 # Core pipeline (Phases A-B)
-mediapipe>=0.10.14
-opencv-python>=4.9
-numpy>=1.26,<2.3
+mediapipe==0.10.35
+opencv-python==4.13.0.92
+numpy==2.2.6
 
 # Evaluation harness (Phase H) — Penn Action .mat labels + plots
-scipy>=1.11
-matplotlib>=3.7
+scipy==1.17.1
+matplotlib==3.10.9
 
 # API server (Phase E)
-fastapi>=0.110
-uvicorn[standard]>=0.27
-python-multipart>=0.0.9
+fastapi==0.136.3
+uvicorn[standard]==0.49.0
+python-multipart==0.0.32
 
-# Phase D voice transcription is optional and NOT installed by default
-# (pulls in torch ~2GB). Enable with:
+# Tests
+pytest==9.1.1
+
+# Phase D voice transcription: Groq-hosted whisper-large-v3 is the default and
+# needs no extra install. The local fallback is optional and NOT installed by
+# default (pulls in torch ~2GB). Enable with:
 #   pip install openai-whisper
