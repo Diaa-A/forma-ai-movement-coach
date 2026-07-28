@@ -1,0 +1,73 @@
+// Mirrors backend/api/schemas.py. If you change one, change the other — there's
+// no codegen step here, and the field that will bite you is an optional one that
+// the UI quietly renders as empty.
+
+export type AnalysisStatus = 'ok' | 'no_reps' | 'low_detection'
+
+/** Where the coaching prose came from. Surfaced in the UI, not just logged —
+ *  the user should know when they're reading the system's own wording rather
+ *  than the language model's. */
+export type ReportSource = 'llm' | 'dry_run' | 'dry_run_fallback' | 'not_analyzed'
+
+export interface Exercise {
+  id: string
+  name: string
+  view_label: string
+  filming_guide: string
+  /** anatomical plane -> what filming from that view lets the system assess */
+  assesses: Record<string, string[]>
+}
+
+export interface KeyFrame {
+  url: string
+  label: string
+  timestamp: number
+}
+
+export interface RepStat {
+  start: number
+  bottom: number
+  end: number
+  knee_min?: number | null
+  knee_max?: number | null
+  score?: number | null
+  breakdown?: Record<string, number> | null
+}
+
+export interface CoachingReport {
+  what_went_well: string[]
+  primary_issue: string
+  secondary_issues: string[]
+  corrective_cues: string[]
+  next_session_focus: string
+  source: ReportSource
+  model?: string | null
+  /** deterministic camera-view guidance — never LLM-written (Decision 23), so
+   *  it gets its own treatment in the UI rather than being mixed into the prose */
+  filming_tip?: string | null
+}
+
+export interface AnalyzeResponse {
+  job_id: string
+  exercise_type: string
+  status: AnalysisStatus
+  fps: number
+  frame_count: number
+  side: string
+  annotated_video_url: string
+  angles_url: string
+  key_frames: KeyFrame[]
+  reps: RepStat[]
+  coaching_report?: CoachingReport | null
+  voice_transcript?: string | null
+  warnings: string[]
+}
+
+/** What went wrong, in a shape the UI can render without guessing.
+ *  `kind` decides the copy; `message` is either the server's own wording (which
+ *  is written for users) or ours. */
+export interface ApiError {
+  kind: 'network' | 'timeout' | 'rejected' | 'server' | 'aborted'
+  message: string
+  status?: number
+}

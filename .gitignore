@@ -18,3 +18,8 @@ data/test_videos/pexels/**/*.mp4
 .idea/
 .vscode/
 *.egg-info/
+
+# frontend build artefacts
+frontend/node_modules/
+frontend/dist/
+frontend/tsconfig.tsbuildinfo

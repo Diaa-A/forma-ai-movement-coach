@@ -56,21 +56,52 @@ app.mount("/results", StaticFiles(directory=str(OUTPUT_ROOT)), name="results")
 app.include_router(api_router)
 
 
-@app.get("/")
-def root():
-    return JSONResponse({
-        "name": "AI Fitness & Movement Coach API",
-        "version": app.version,
-        "endpoints": {
-            "POST /analyze": "multipart: video, exercise_type, voice_note (opt), "
-                             "voice_note_text (opt), pose_model (opt), dry_run_coach (opt)",
-            "GET  /results/<job>/<file>": "static — annotated.mp4, worst.jpg, "
-                                          "best.jpg, angles.json, coaching.json",
-            "GET  /health": "liveness check",
-        },
-    })
+API_INDEX = {
+    "name": "AI Fitness & Movement Coach API",
+    "version": app.version,
+    "endpoints": {
+        "GET  /exercises": "what can be analysed + how to film each one",
+        "POST /analyze": "multipart: video, exercise_type, voice_note (opt), "
+                         "voice_note_text (opt), pose_model (opt), dry_run_coach (opt)",
+        "GET  /results/<job>/<file>": "static — annotated.mp4, worst.jpg, "
+                                      "best.jpg, angles.json, coaching.json",
+        "GET  /health": "liveness check",
+    },
+}
+
+
+@app.get("/api")
+def api_index():
+    return JSONResponse(API_INDEX)
 
 
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# The PWA
+# ---------------------------------------------------------------------------
+# Serving the built frontend from here means the app and the API share an origin.
+# That buys three things worth having: no CORS in production, no mixed-content
+# problems, and a service worker that can actually register (they're same-origin
+# only). The cost is that deploying the backend means shipping the frontend build
+# with it.
+#
+# Mounted LAST, because a mount at "/" matches everything and would otherwise
+# swallow /analyze and /exercises.
+FRONTEND_DIST = Path(__file__).resolve().parents[1] / "frontend" / "dist"
+
+if FRONTEND_DIST.is_dir():
+    app.mount("/", StaticFiles(directory=str(FRONTEND_DIST), html=True), name="pwa")
+else:
+    # No build present — someone is running the API on its own, which is a normal
+    # thing to do (the CLI path, or backend tests). Say so rather than 404ing.
+    @app.get("/")
+    def root():
+        return JSONResponse({
+            **API_INDEX,
+            "note": "frontend/dist not found — run `npm run build` in frontend/ "
+                    "to serve the PWA from this origin.",
+        })
