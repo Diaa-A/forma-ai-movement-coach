@@ -27,9 +27,17 @@ class ExerciseProfile:
     view_label: str                         # short, e.g. "side-on"
     filming_guide: str                      # one-line instruction shown pre-upload
     plane_assessments: Dict[str, List[str]] # plane -> what that view lets you assess
+    # What the UI puts on the button. Optional because `name` is a fine default
+    # for the ones that are a single lowercase word; it exists for the ones that
+    # aren't ("pushup" should read "Push-up", not "Pushup").
+    display_name: Optional[str] = None
 
     def assessments(self, plane: str) -> List[str]:
         return self.plane_assessments.get(plane, [])
+
+    @property
+    def label(self) -> str:
+        return self.display_name or self.name.capitalize()
 
 
 def _join(items: List[str]) -> str:

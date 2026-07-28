@@ -16,7 +16,9 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
 from ..pipeline.runner import run_squat_pipeline, RunOptions, RunResult
-from .schemas import AnalyzeResponse, KeyFrame, RepStat, CoachingReportOut
+from ..exercises.registry import PROFILES, exercise_ids
+from .schemas import (AnalyzeResponse, KeyFrame, RepStat, CoachingReportOut,
+                      ExerciseOut, ExercisesResponse)
 
 
 router = APIRouter()
@@ -32,7 +34,10 @@ OUTPUT_ROOT     = DATA_ROOT / "outputs"
 MAX_VIDEO_BYTES = 100 * 1024 * 1024     # 100MB — generous but bounded
 ALLOWED_VIDEO_SUFFIXES = {".mp4", ".mov", ".webm", ".m4v"}
 ALLOWED_AUDIO_SUFFIXES = {".wav", ".mp3", ".m4a", ".webm", ".ogg"}
-ALLOWED_EXERCISES = {"squat"}    # push-up / pull-up arrive in Phase G
+# derived from the profile registry, not written out again here — one list means
+# the allowlist and the exercise picker can't drift apart. push-up / pull-up
+# arrive by registering their profile (Phase G).
+ALLOWED_EXERCISES = set(PROFILES)
 
 
 def _save_upload(up: UploadFile, dest: Path, max_bytes: int):
@@ -50,6 +55,27 @@ def _save_upload(up: UploadFile, dest: Path, max_bytes: int):
                 raise HTTPException(413, f"upload exceeds {max_bytes} bytes")
             fh.write(chunk)
     return dest
+
+
+@router.get("/exercises", response_model=ExercisesResponse)
+def exercises():
+    """What the app can analyse, and how to film each one.
+
+    The PWA calls this on load to build the exercise picker and, more usefully,
+    to show the filming guidance *before* the user records anything — bad camera
+    placement is the single biggest cause of a clip we can't assess properly
+    (Decision 23), and it's much cheaper to prevent than to detect.
+    """
+    return ExercisesResponse(exercises=[
+        ExerciseOut(
+            id=ex_id,
+            name=PROFILES[ex_id].label,
+            view_label=PROFILES[ex_id].view_label,
+            filming_guide=PROFILES[ex_id].filming_guide,
+            assesses=PROFILES[ex_id].plane_assessments,
+        )
+        for ex_id in exercise_ids()
+    ])
 
 
 @router.post("/analyze", response_model=AnalyzeResponse)

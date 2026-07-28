@@ -23,6 +23,9 @@ python-multipart==0.0.32
 
 # Tests
 pytest==9.1.1
+# fastapi's TestClient goes through starlette, which needs a real HTTP client to
+# drive the app. Test-only — nothing in backend/ imports it.
+httpx2==2.9.1
 
 # Phase D voice transcription: Groq-hosted whisper-large-v3 is the default and
 # needs no extra install. The local fallback is optional and NOT installed by

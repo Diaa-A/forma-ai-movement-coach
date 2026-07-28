@@ -7,6 +7,25 @@ from typing import List, Optional, Any
 from pydantic import BaseModel, Field
 
 
+class ExerciseOut(BaseModel):
+    """One entry in GET /exercises.
+
+    `filming_guide` is the string the PWA shows *before* the user records, so the
+    guidance and the coaching come from the same source. `assesses` is the
+    plane -> assessments map, which lets the UI say what a given camera view can
+    and can't cover without knowing anything about anatomy itself.
+    """
+    id: str
+    name: str
+    view_label: str
+    filming_guide: str
+    assesses: dict
+
+
+class ExercisesResponse(BaseModel):
+    exercises: List[ExerciseOut]
+
+
 class KeyFrame(BaseModel):
     url: str
     label: str
