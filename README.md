@@ -1,8 +1,13 @@
 # AI Fitness & Movement Coach
 
 CM3070 final project — server-side Python pipeline that analyses a user-uploaded
-exercise video and returns coaching feedback. Spec is in `BUILD_REFERENCE.md` (synced
-from `CM3070_Technical_Spec.md`).
+exercise video and returns coaching feedback. Live build reference is `BUILD_REFERENCE.md`;
+the original spec it was synced from is `docs/CM3070_Technical_Spec.md`.
+
+**Start here:** `BUILD_REFERENCE.md` for what the system is and what is built · the Setup
+section below to get it running · `docs/CM3070_PROJECT_STATE.md` for delivery
+state and the code review · `report/CM3070_Decision_Log.md` for why anything is
+the way it is.
 
 ## Status
 
@@ -13,16 +18,19 @@ from `CM3070_Technical_Spec.md`).
 | C — two-layer coaching (Layer 1 deterministic cue evaluator + Layer 2 Groq LLM, with dry-run fallback) | done; live (Groq key in `.env`) |
 | D — voice transcription (Groq `whisper-large-v3` default, local `openai-whisper` fallback) | done; live |
 | E — FastAPI server with `/analyze` multipart endpoint | done |
-| F — PWA frontend | not started |
+| F — PWA frontend | not started — critical path |
 | G — push-up / pull-up analysers | not started |
 | H — Penn Action evaluation harness | done (squat subset — see `data\outputs\penn_eval\`) |
 
 ## Quick start
 
+Run Setup first. `PY` below is your venv interpreter — see
+[Which interpreter to type](#which-interpreter-to-type).
+
 ### CLI
 
 ```
-.venv\Scripts\python.exe analyze_squat.py --input data\test_videos\squat.mp4
+PY analyze_squat.py --input data/test_videos/squat.mp4
 ```
 
 Useful flags:
@@ -32,7 +40,7 @@ Useful flags:
 - `--voice-note <audio>` — transcribe via Whisper, pass to LLM as context
 - `--voice-note-text "..."` — same but plain text (no Whisper needed)
 
-Outputs go to `data\outputs\<job_id>\`:
+Outputs go to `data/outputs/<job_id>/`:
 - `annotated.mp4` — clip with skeleton overlay, colour-coded
 - `worst.jpg`, `best.jpg` — annotated key frames
 - `angles.json` — per-frame joint angles, phase labels, rep stats, world landmarks
@@ -41,15 +49,13 @@ Outputs go to `data\outputs\<job_id>\`:
 ### API
 
 ```
-.venv\Scripts\python.exe -m uvicorn backend.main:app --reload --port 8000
+PY -m uvicorn backend.main:app --reload --port 8000
 ```
 
-Then:
+Then, on one line so it works in cmd, PowerShell and a POSIX shell alike:
+
 ```
-curl -F "video=@data\test_videos\squat.mp4" ^
-     -F "exercise_type=squat" ^
-     -F "dry_run_coach=true" ^
-     http://127.0.0.1:8000/analyze
+curl -F "video=@data/test_videos/squat.mp4" -F "exercise_type=squat" -F "dry_run_coach=true" http://127.0.0.1:8000/analyze
 ```
 
 Returns JSON with URLs to artefacts served from `/results/<job_id>/`.
@@ -57,63 +63,97 @@ Returns JSON with URLs to artefacts served from `/results/<job_id>/`.
 ### Tests
 
 ```
-.venv\Scripts\python.exe -m pytest
+PY -m pytest
 ```
 
 51 tests: angle maths vs known geometry, One Euro behaviour, phase detection on
 synthetic signals, rep filter, cue gating, and an end-to-end smoke test (the
-smoke test needs `data\test_videos\squat.mp4` and skips itself on a clean
-checkout, where test videos are gitignored).
+smoke test needs `data/test_videos/squat.mp4` and skips itself on a clean
+checkout, where test videos are gitignored — a skip there is expected, not a
+failure).
 
 ### Pexels fixture fetcher
 
 ```
-.venv\Scripts\python.exe scripts\fetch_pexels.py --query "squat" --count 5
+PY scripts/fetch_pexels.py --query "squat" --count 5
 ```
 
 Requires `PEXELS_API_KEY` in `.env`. Pulls CC0 clips into
-`data\test_videos\pexels\<query>\` with a `SOURCE.txt` manifest holding the
+`data/test_videos/pexels/<query>/` with a `SOURCE.txt` manifest holding the
 licence + photographer credits.
 
 ## Setup
 
+Requires **Python 3.13** and about 1 GB of disk for the virtual environment.
+
+**Windows** (PowerShell or cmd):
+
 ```
-C:\Python313\python.exe -m venv .venv
+py -3.13 -m venv .venv
 .venv\Scripts\python.exe -m pip install --upgrade pip
-.venv\Scripts\python.exe -m pip install mediapipe opencv-python "numpy<2.3" fastapi "uvicorn[standard]" python-multipart
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+copy .env.example .env
 ```
 
-Spec says Python 3.11 but the 3.11.0 install on this machine has a broken
-os.mkdir hook — falling back to 3.13 was the pragmatic call. MediaPipe 0.10.35
-ships 3.13 wheels.
-
-Copy `.env.example` to `.env` and fill in keys when ready:
-- `GROQ_API_KEY` — for Phase C live LLM (dry-run works without it)
-- `PEXELS_API_KEY` — for fixture fetcher
-
-### Optional: voice transcription
+**macOS / Linux**:
 
 ```
-.venv\Scripts\python.exe -m pip install openai-whisper
+python3.13 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip
+.venv/bin/python -m pip install -r requirements.txt
+cp .env.example .env
 ```
 
-This pulls in torch (~2 GB on CPU). Only needed when using `--voice-note <audio>`.
+Then open `.env` and fill in the keys:
+- `GROQ_API_KEY` — Phase C live LLM and Phase D transcription. The system runs
+  without it: pass `--dry-run-coach` and you get the deterministic report instead.
+- `PEXELS_API_KEY` — only needed for the fixture fetcher.
+
+### Why Python 3.13 and not the 3.11 in the spec
+
+Deliberate, not a workaround. MediaPipe 0.10.35 publishes CPython 3.13 wheels, so
+every pinned dependency in `requirements.txt` installs as a prebuilt wheel on
+Windows, macOS and Linux with no compiler step — which matters a lot more for
+"can someone else run this" than the minor version does. The whole pinned stack
+was built and validated on 3.13. (What raised the question was a broken 3.11.0
+install on the dev machine; what settled it was the wheel coverage.)
+
+### Which interpreter to type
+
+The rest of this README writes the interpreter as **`PY`**:
+
+| Platform | `PY` is |
+|---|---|
+| Windows | `.venv\Scripts\python.exe` |
+| macOS / Linux | `.venv/bin/python` |
+
+Forward slashes in the *arguments* work everywhere — Python normalises them — so
+only the interpreter path differs.
+
+### Optional: local voice transcription fallback
+
+```
+PY -m pip install openai-whisper
+```
+
+Pulls in torch (~2 GB on CPU). Not needed in normal use: transcription defaults to
+Groq-hosted `whisper-large-v3` (Decision 22). This is the offline fallback only.
 
 ## File layout
 
 ```
-Final-proj\
-├── BUILD_REFERENCE.md         reference spec (read first)
+.
+├── BUILD_REFERENCE.md         build reference (read first)
 ├── README.md                  this file
 ├── analyze_squat.py           CLI entry
 ├── .env.example
 ├── requirements.txt
-├── backend\
+├── backend/
 │   ├── main.py                FastAPI app
-│   ├── api\
+│   ├── api/
 │   │   ├── routes.py          POST /analyze
 │   │   └── schemas.py         response models
-│   ├── pipeline\
+│   ├── pipeline/
 │   │   ├── runner.py          shared orchestrator (CLI + API both use this)
 │   │   ├── pose.py            MediaPipe Pose wrapper
 │   │   ├── filter.py          One Euro filter (Casiez 2012)
@@ -122,14 +162,20 @@ Final-proj\
 │   │   ├── render.py          skeleton overlay
 │   │   ├── coaching.py        Layer 2 — Groq LLM wrapper + dry-run
 │   │   └── whisper_wrapper.py Phase D voice transcription (lazy)
-│   └── exercises\
-│       ├── squat.py           form scoring + side selection + worst/best
-│       └── squat_cues.py      Layer 1 — cue database + evaluator
-├── scripts\
+│   ├── evaluation/            Penn Action loader + MPJPE / PCK metrics
+│   ├── exercises/
+│   │   ├── base.py            ExerciseProfile — camera-view / plane gating
+│   │   ├── squat.py           form scoring + side selection + worst/best
+│   │   └── squat_cues.py      Layer 1 — cue database + evaluator
+│   └── tests/                 51 pytest tests
+├── docs/                      spec, tracker, delivery state, work packages
+├── report/                    decision log 1–23, handoff note, Ch4 + figures
+├── scripts/
+│   ├── eval_penn_action.py    Phase H benchmark harness
 │   └── fetch_pexels.py        CC0 fixture downloader
-└── data\
-    ├── models\                MediaPipe .task files (lite + full)
-    ├── test_videos\           input clips (gitignored)
-    ├── uploads\               API multipart uploads (gitignored)
-    └── outputs\               per-job artefacts (gitignored)
+└── data/
+    ├── models/                MediaPipe .task files (lite + full)
+    ├── test_videos/           input clips (gitignored)
+    ├── uploads/               API multipart uploads (gitignored)
+    └── outputs/               per-job artefacts (gitignored)
 ```
