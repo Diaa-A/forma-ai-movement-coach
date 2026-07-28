@@ -3,6 +3,7 @@ MediaPipe's drawing helper so per-joint colour control is straightforward."""
 import cv2
 import numpy as np
 from .pose import LM, VISIBILITY_THRESHOLD
+from .encoder import VideoEncoder
 
 
 # Edge list — only the joints we actually analyse. Keeps the overlay readable.
@@ -96,7 +97,12 @@ def draw_overlay(frame_bgr, landmarks_frame, flagged_joints=None, info_text=None
 
 def render_video(input_path, landmarks_all, angles_all, output_path,
                  flagged_per_frame=None):
-    """Re-encode the input video with skeleton overlays per frame."""
+    """Re-encode the input video with skeleton overlays per frame.
+
+    The encoding itself lives in `encoder.py` — see the docstring there for why
+    we don't just hand this to cv2.VideoWriter. Short version: the file it
+    produces doesn't play in a browser, and this output is the main thing the
+    PWA shows the user."""
     cap = cv2.VideoCapture(str(input_path))
     if not cap.isOpened():
         raise RuntimeError(f"could not open input video: {input_path}")
@@ -104,27 +110,25 @@ def render_video(input_path, landmarks_all, angles_all, output_path,
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
     w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    writer = cv2.VideoWriter(str(output_path), fourcc, fps, (w, h))
 
     n = len(landmarks_all)
     flagged_per_frame = flagged_per_frame or [set()] * n
 
-    i = 0
-    while True:
-        ok, frame = cap.read()
-        if not ok or i >= n:
-            break
-        ang = angles_all[i]
-        info = "knee L:{} R:{}  spine:{}".format(
-            _fmt(ang.get("knee_left")), _fmt(ang.get("knee_right")),
-            _fmt(ang.get("spine")),
-        )
-        draw_overlay(frame, landmarks_all[i], flagged_per_frame[i], info_text=info)
-        writer.write(frame)
-        i += 1
+    with VideoEncoder(output_path, fps, w, h) as writer:
+        i = 0
+        while True:
+            ok, frame = cap.read()
+            if not ok or i >= n:
+                break
+            ang = angles_all[i]
+            info = "knee L:{} R:{}  spine:{}".format(
+                _fmt(ang.get("knee_left")), _fmt(ang.get("knee_right")),
+                _fmt(ang.get("spine")),
+            )
+            draw_overlay(frame, landmarks_all[i], flagged_per_frame[i], info_text=info)
+            writer.write(frame)
+            i += 1
 
-    writer.release()
     cap.release()
     return output_path
 

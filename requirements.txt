@@ -6,6 +6,12 @@ mediapipe==0.10.35
 opencv-python==4.13.0.92
 numpy==2.2.6
 
+# Annotated-video encoding (Decision 24). Ships a static ffmpeg binary per
+# platform, so there is no "install ffmpeg first" step in the setup. OpenCV on
+# its own can only write MPEG-4 Part 2 here, which no browser will play.
+# ~31 MB to download, ~88 MB on disk once unpacked.
+imageio-ffmpeg==0.6.0
+
 # Evaluation harness (Phase H) — Penn Action .mat labels + plots
 scipy==1.17.1
 matplotlib==3.10.9
