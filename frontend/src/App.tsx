@@ -1,22 +1,39 @@
-import { useEffect, useReducer } from 'react'
-import { fetchExercises } from './api'
-import type { Exercise } from './types'
+import { useEffect, useReducer, useRef } from 'react'
+import { analyze, fetchExercises } from './api'
+import type { AnalyzeResponse, ApiError, Exercise } from './types'
 import Disclaimer from './components/Disclaimer'
+import ErrorPanel from './components/ErrorPanel'
 import ExerciseSelect from './screens/ExerciseSelect'
 import FilmingGuide from './screens/FilmingGuide'
+import Capture from './screens/Capture'
+import Processing from './screens/Processing'
+import Results from './screens/Results'
 
 // Five screens, no deep links, no back/forward requirement — so `screen` is a
 // field in the reducer rather than a router. A router here would be a dependency
 // added to model a state machine we already have. The cost is that the phone's
 // back button doesn't step through screens; every screen carries its own back
 // control instead.
-type Screen = 'select' | 'guide' | 'capture' | 'processing' | 'results'
+type Screen = 'select' | 'guide' | 'capture' | 'processing' | 'results' | 'error'
+
+interface Submission {
+  video: File
+  voiceNote: File | null
+  voiceText: string
+}
 
 interface State {
   screen: Screen
   exercises: Exercise[]
   exercisesFailed: boolean
   chosen: Exercise | null
+  submission: Submission | null
+  uploadFraction: number
+  bytesSent: number
+  bytesTotal: number
+  uploadDone: boolean
+  result: AnalyzeResponse | null
+  error: ApiError | null
 }
 
 type Action =
@@ -24,6 +41,11 @@ type Action =
   | { type: 'exercises-failed' }
   | { type: 'pick'; exercise: Exercise }
   | { type: 'to'; screen: Screen }
+  | { type: 'submit'; submission: Submission }
+  | { type: 'upload-progress'; fraction: number; sent: number; total: number }
+  | { type: 'upload-done' }
+  | { type: 'succeeded'; result: AnalyzeResponse }
+  | { type: 'failed'; error: ApiError }
   | { type: 'restart' }
 
 const initial: State = {
@@ -31,6 +53,13 @@ const initial: State = {
   exercises: [],
   exercisesFailed: false,
   chosen: null,
+  submission: null,
+  uploadFraction: 0,
+  bytesSent: 0,
+  bytesTotal: 0,
+  uploadDone: false,
+  result: null,
+  error: null,
 }
 
 // A single exercise so the app is usable even if /exercises is unreachable on
@@ -57,6 +86,31 @@ function reducer(state: State, action: Action): State {
       return { ...state, chosen: action.exercise, screen: 'guide' }
     case 'to':
       return { ...state, screen: action.screen }
+    case 'submit':
+      return {
+        ...state,
+        submission: action.submission,
+        screen: 'processing',
+        uploadFraction: 0,
+        bytesSent: 0,
+        bytesTotal: action.submission.video.size,
+        uploadDone: false,
+        error: null,
+      }
+    case 'upload-progress':
+      return { ...state, uploadFraction: action.fraction,
+               bytesSent: action.sent, bytesTotal: action.total }
+    case 'upload-done':
+      return { ...state, uploadDone: true, uploadFraction: 1 }
+    case 'succeeded':
+      return { ...state, result: action.result, screen: 'results' }
+    case 'failed':
+      // a cancel goes back to the capture screen with the file still chosen,
+      // rather than to an error page that says "you did that on purpose"
+      if (action.error.kind === 'aborted') {
+        return { ...state, screen: 'capture', error: null }
+      }
+      return { ...state, error: action.error, screen: 'error' }
     case 'restart':
       // keep the loaded exercise list, drop everything about the last run
       return { ...initial, exercises: state.exercises, exercisesFailed: state.exercisesFailed }
@@ -65,6 +119,7 @@ function reducer(state: State, action: Action): State {
 
 export default function App() {
   const [state, dispatch] = useReducer(reducer, initial)
+  const inFlight = useRef<{ abort: () => void } | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -79,6 +134,30 @@ export default function App() {
       cancelled = true
     }
   }, [])
+
+  function send(submission: Submission) {
+    dispatch({ type: 'submit', submission })
+
+    const handle = analyze({
+      video: submission.video,
+      exerciseType: state.chosen?.id ?? 'squat',
+      voiceNote: submission.voiceNote,
+      voiceNoteText: submission.voiceText,
+      onUploadProgress: (fraction, sent, total) =>
+        dispatch({ type: 'upload-progress', fraction, sent, total }),
+      onUploadComplete: () => dispatch({ type: 'upload-done' }),
+    })
+    inFlight.current = handle
+
+    handle.result
+      .then((result) => dispatch({ type: 'succeeded', result }))
+      .catch((error: ApiError) => dispatch({ type: 'failed', error }))
+      .finally(() => { inFlight.current = null })
+  }
+
+  function cancel() {
+    inFlight.current?.abort()
+  }
 
   return (
     <main>
@@ -98,14 +177,38 @@ export default function App() {
         />
       )}
 
-      {state.screen === 'capture' && (
-        <div className="stack">
-          <h1>Choose a clip</h1>
-          <p className="muted">Not built yet — next commit.</p>
-          <button className="btn btn-quiet" onClick={() => dispatch({ type: 'restart' })}>
-            Start again
-          </button>
-        </div>
+      {state.screen === 'capture' && state.chosen && (
+        <Capture
+          exercise={state.chosen}
+          onSubmit={(video, voiceNote, voiceText) =>
+            send({ video, voiceNote, voiceText })}
+          onBack={() => dispatch({ type: 'to', screen: 'guide' })}
+        />
+      )}
+
+      {state.screen === 'processing' && (
+        <Processing
+          uploadFraction={state.uploadFraction}
+          bytesSent={state.bytesSent}
+          bytesTotal={state.bytesTotal}
+          uploadDone={state.uploadDone}
+          onCancel={cancel}
+        />
+      )}
+
+      {state.screen === 'results' && state.result && (
+        <Results
+          result={state.result}
+          onRestart={() => dispatch({ type: 'restart' })}
+        />
+      )}
+
+      {state.screen === 'error' && state.error && (
+        <ErrorPanel
+          error={state.error}
+          onRetry={() => state.submission && send(state.submission)}
+          onRestart={() => dispatch({ type: 'restart' })}
+        />
       )}
 
       <Disclaimer />

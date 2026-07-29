@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
@@ -25,5 +26,10 @@ export default defineConfig({
     // the backend mounts this directory; keep the hashed filenames so the
     // service worker cache versioning has something to key off
     assetsDir: 'assets',
+  },
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: './src/__tests__/setup.ts',
   },
 })

@@ -171,3 +171,119 @@ li { margin-bottom: 6px; }
 .plane-list li:last-child { border-bottom: 0; }
 .plane-list .tick { color: var(--good); font-weight: 700; }
 .plane-list .cross { color: var(--text-dim); font-weight: 700; }
+
+/* ---- form controls -------------------------------------------------- */
+
+.textarea {
+  width: 100%;
+  margin-top: 10px;
+  padding: 11px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  resize: vertical;
+}
+
+.link-btn {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.btn-bad { background: var(--bad); border-color: var(--bad); color: #1a0d0c; }
+
+/* ---- upload progress ------------------------------------------------ */
+
+.progress {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  /* smooth over the gaps between progress events, which arrive irregularly */
+  transition: width 0.25s linear;
+}
+
+/* ---- pipeline stage list -------------------------------------------- */
+
+.stage-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  counter-reset: none;
+}
+
+.stage-list li {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 6px 0;
+  color: var(--text-dim);
+  opacity: 0.55;
+}
+
+.stage-list li.done   { opacity: 1; }
+.stage-list li.active { opacity: 1; color: var(--text); font-weight: 600; }
+
+.stage-mark {
+  width: 14px;
+  flex: none;
+  color: var(--good);
+  font-weight: 700;
+}
+
+.stage-list li.active .stage-mark { color: var(--accent); }
+
+/* ---- results -------------------------------------------------------- */
+
+.annotated-video {
+  width: 100%;
+  border-radius: var(--radius);
+  background: #000;
+  display: block;
+}
+
+.keyframes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+/* one column on narrow phones — two portrait frames side by side end up too
+   small to see a joint angle in */
+@media (max-width: 430px) {
+  .keyframes { grid-template-columns: 1fr; }
+}
+
+.keyframe { margin: 0; }
+
+.keyframe img {
+  width: 100%;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  display: block;
+}
+
+.keyframe figcaption { margin-top: 6px; }
+
+/* The filming tip is generated deterministically, never by the language model
+   (Decision 23). Giving it a different edge keeps that distinction visible
+   instead of letting it blend into the coaching prose. */
+.filming-tip { border-left: 4px solid var(--accent); }
+
+.provenance {
+  margin: 0;
+  padding-top: 2px;
+  font-style: italic;
+}
