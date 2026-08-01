@@ -287,3 +287,11 @@ li { margin-bottom: 6px; }
   padding-top: 2px;
   font-style: italic;
 }
+
+/* ---- install hint --------------------------------------------------- */
+
+.install-hint {
+  border-left: 4px solid var(--accent);
+}
+
+.install-hint .btn-row { margin-top: 4px; }

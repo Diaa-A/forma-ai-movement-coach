@@ -46,11 +46,37 @@ Outputs go to `data/outputs/<job_id>/`:
 - `angles.json` — per-frame joint angles, phase labels, rep stats, world landmarks
 - `coaching.json` — Layer 1 evaluation + Layer 2 report
 
-### API
+### The app
+
+Build the frontend once (needs Node 18+), then start the server — it serves the
+PWA and the API from the same origin, so there is only one thing to run:
+
+```
+cd frontend && npm install && npm run build && cd ..
+```
+
+```
+PY -m uvicorn backend.main:app --host 0.0.0.0 --port 8000
+```
+
+Open http://127.0.0.1:8000. Binding to `0.0.0.0` also lets a phone on the same
+network reach it at `http://<your-ip>:8000` — everything works there except
+recording a voice note, which needs `getUserMedia` and therefore HTTPS. Typing
+the note works, and so does everything else, because video capture uses a file
+input rather than a media stream. For the full journey over HTTPS without
+deploying, tunnel it: `cloudflared tunnel --url http://localhost:8000`.
+
+For frontend work, `npm run dev` in `frontend/` gives hot reload on
+http://localhost:5173 and proxies API calls to port 8000. Frontend tests:
+`npm test`.
+
+### API on its own
 
 ```
 PY -m uvicorn backend.main:app --reload --port 8000
 ```
+
+Without a frontend build present, `/` returns the endpoint list instead of the app.
 
 Then, on one line so it works in cmd, PowerShell and a POSIX shell alike:
 
@@ -168,6 +194,12 @@ Groq-hosted `whisper-large-v3` (Decision 22). This is the offline fallback only.
 │   │   ├── squat.py           form scoring + side selection + worst/best
 │   │   └── squat_cues.py      Layer 1 — cue database + evaluator
 │   └── tests/                 51 pytest tests
+├── frontend/                  the PWA (React + Vite); built output is served by FastAPI
+│   ├── public/                manifest, service worker, icons
+│   └── src/
+│       ├── api.ts             the only module that talks to the backend
+│       ├── screens/           select → guide → capture → processing → results
+│       └── components/
 ├── docs/                      spec, tracker, delivery state, work packages
 ├── report/                    decision log 1–23, handoff note, Ch4 + figures
 ├── scripts/

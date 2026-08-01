@@ -1,8 +1,11 @@
 import { useEffect, useReducer, useRef } from 'react'
 import { analyze, fetchExercises } from './api'
 import type { AnalyzeResponse, ApiError, Exercise } from './types'
+import { useOnline } from './useOnline'
 import Disclaimer from './components/Disclaimer'
 import ErrorPanel from './components/ErrorPanel'
+import InstallPrompt from './components/InstallPrompt'
+import OfflineNotice from './components/OfflineNotice'
 import ExerciseSelect from './screens/ExerciseSelect'
 import FilmingGuide from './screens/FilmingGuide'
 import Capture from './screens/Capture'
@@ -120,8 +123,12 @@ function reducer(state: State, action: Action): State {
 export default function App() {
   const [state, dispatch] = useReducer(reducer, initial)
   const inFlight = useRef<{ abort: () => void } | null>(null)
+  const online = useOnline()
 
+  // refetch when the connection comes back, so an app opened offline heals
+  // itself rather than needing a manual reload
   useEffect(() => {
+    if (!online) return
     let cancelled = false
     fetchExercises()
       .then((exercises) => {
@@ -133,7 +140,21 @@ export default function App() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [online])
+
+  // Opened with no connection and nothing to show yet: that deserves the whole
+  // screen. Once there's a result on screen we keep it and drop to a banner —
+  // throwing away someone's analysis because the wifi dropped would be worse
+  // than the disconnection.
+  const deadStart = !online && state.screen === 'select' && state.exercisesFailed
+  if (deadStart) {
+    return (
+      <main>
+        <OfflineNotice standalone />
+        <Disclaimer />
+      </main>
+    )
+  }
 
   function send(submission: Submission) {
     dispatch({ type: 'submit', submission })
@@ -161,6 +182,8 @@ export default function App() {
 
   return (
     <main>
+      {!online && <OfflineNotice />}
+
       {state.screen === 'select' && (
         <ExerciseSelect
           exercises={state.exercises}
@@ -180,6 +203,7 @@ export default function App() {
       {state.screen === 'capture' && state.chosen && (
         <Capture
           exercise={state.chosen}
+          online={online}
           onSubmit={(video, voiceNote, voiceText) =>
             send({ video, voiceNote, voiceText })}
           onBack={() => dispatch({ type: 'to', screen: 'guide' })}
@@ -210,6 +234,10 @@ export default function App() {
           onRestart={() => dispatch({ type: 'restart' })}
         />
       )}
+
+      {/* only offered on the first screen — nobody wants an install nag halfway
+          through waiting for their analysis */}
+      {state.screen === 'select' && <InstallPrompt />}
 
       <Disclaimer />
     </main>

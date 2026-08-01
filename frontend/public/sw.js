@@ -1,0 +1,106 @@
+/* Service worker. Hand-written — Workbox would be a build plugin and a generated
+   file, and the policy here is short enough to read in one sitting, which is
+   worth more than the lines it would save.
+
+   The rule that isn't negotiable: /results/* is NEVER cached. Those are videos
+   and stills of the user's body. Decision 22 promises deletion and no retention,
+   and writing them into a device cache outside that promise would contradict the
+   consent form participants are going to sign. Storage is cheap; the guarantee
+   isn't. This worker simply doesn't intercept those requests.
+
+   Everything else:
+     navigation      network first, cached shell as the fallback. New builds land
+                     straight away when online, and the app still boots offline.
+     hashed assets   cache first. The filename changes when the content does, so
+                     a cached one is never stale.
+     icons/manifest  cache first, stale is fine.
+     /exercises      not cached. Filming guidance that's quietly out of date is
+                     worse than a spinner, and the app already carries its own
+                     fallback for when this call fails.
+     anything POST   not intercepted. A silently replayed upload of somebody's
+                     body video is not a feature.
+*/
+
+const VERSION = 'v1'
+const SHELL_CACHE = `formcoach-shell-${VERSION}`
+const ASSET_CACHE = `formcoach-assets-${VERSION}`
+const KEEP = [SHELL_CACHE, ASSET_CACHE]
+
+// Stable paths only. The JS and CSS filenames are hashed at build time so this
+// file can't know them — they get picked up at runtime on first request instead.
+const SHELL = [
+  '/',
+  '/manifest.webmanifest',
+  '/icons/icon-192.png',
+  '/icons/apple-touch-icon.png',
+]
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(SHELL_CACHE)
+      // addAll is all-or-nothing; one 404 would leave us with no shell at all,
+      // so add them individually and let the stragglers get picked up at runtime
+      .then((cache) => Promise.allSettled(SHELL.map((url) => cache.add(url))))
+      .then(() => self.skipWaiting()),
+  )
+})
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys()
+      .then((names) => Promise.all(
+        names.filter((n) => n.startsWith('formcoach-') && !KEEP.includes(n))
+             .map((n) => caches.delete(n)),
+      ))
+      .then(() => self.clients.claim()),
+  )
+})
+
+self.addEventListener('fetch', (event) => {
+  const { request } = event
+  if (request.method !== 'GET') return
+
+  const url = new URL(request.url)
+  if (url.origin !== self.location.origin) return
+
+  // the user's own footage — leave it entirely alone, see the note at the top
+  if (url.pathname.startsWith('/results/')) return
+
+  // live data, deliberately never served stale
+  if (url.pathname === '/exercises' || url.pathname === '/health') return
+
+  if (request.mode === 'navigate') {
+    event.respondWith(networkFirstDocument(request))
+    return
+  }
+
+  if (url.pathname.startsWith('/assets/') || url.pathname.startsWith('/icons/')
+      || url.pathname === '/manifest.webmanifest') {
+    event.respondWith(cacheFirst(request, ASSET_CACHE))
+  }
+})
+
+async function networkFirstDocument(request) {
+  try {
+    const fresh = await fetch(request)
+    const cache = await caches.open(SHELL_CACHE)
+    cache.put('/', fresh.clone())
+    return fresh
+  } catch {
+    // offline: hand back whatever shell we have. The app detects the connection
+    // itself and explains the situation — it does not pretend to work.
+    const cached = await caches.match('/', { cacheName: SHELL_CACHE })
+    return cached || Response.error()
+  }
+}
+
+async function cacheFirst(request, cacheName) {
+  const cached = await caches.match(request)
+  if (cached) return cached
+  const response = await fetch(request)
+  if (response.ok) {
+    const cache = await caches.open(cacheName)
+    cache.put(request, response.clone())
+  }
+  return response
+}

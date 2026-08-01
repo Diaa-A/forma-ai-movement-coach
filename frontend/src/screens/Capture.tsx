@@ -8,6 +8,7 @@ import {
 
 interface Props {
   exercise: Exercise
+  online: boolean
   onSubmit: (video: File, voiceNote: File | null, voiceText: string) => void
   onBack: () => void
 }
@@ -30,7 +31,7 @@ interface Picked {
  * Everything is validated here before a byte leaves the device, because finding
  * out a clip was too long after three minutes of uploading on 4G is miserable.
  */
-export default function Capture({ exercise, onSubmit, onBack }: Props) {
+export default function Capture({ exercise, online, onSubmit, onBack }: Props) {
   const [picked, setPicked] = useState<Picked | null>(null)
   const [rejection, setRejection] = useState<string | null>(null)
   const [voiceNote, setVoiceNote] = useState<File | null>(null)
@@ -150,11 +151,17 @@ export default function Capture({ exercise, onSubmit, onBack }: Props) {
 
       <button
         className="btn btn-primary"
-        disabled={!picked || checking}
+        disabled={!picked || checking || !online}
         onClick={() => picked && onSubmit(picked.file, voiceNote, voiceText.trim())}
       >
-        Analyse my form
+        {online ? 'Analyse my form' : 'Needs a connection'}
       </button>
+      {!online && picked && (
+        <p className="small muted" style={{ marginTop: 0 }}>
+          Your clip is still selected. This button comes back as soon as you're
+          reconnected.
+        </p>
+      )}
       <button className="btn btn-quiet" onClick={onBack}>
         Back to filming tips
       </button>
