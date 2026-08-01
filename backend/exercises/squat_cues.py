@@ -16,7 +16,8 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Optional
 import numpy as np
 
-from .squat import frame_valid, LEAN_EXCESS_LIMIT, MIN_CUE_VISIBILITY
+from .squat import (frame_valid, LEAN_EXCESS_LIMIT, MIN_CUE_VISIBILITY,
+                    DEPTH_FLAG_KNEE_ANGLE as _DEPTH_FLAG_KNEE_ANGLE)
 from .base import ExerciseProfile, SAGITTAL, FRONTAL, coverage_guidance
 from ..pipeline.pose import LM
 
@@ -190,7 +191,9 @@ class Evaluation:
 
 # Detection thresholds. Kept here (next to the cue text they fire) rather than
 # scattered. Phase D / E may move some of these to per-user calibration.
-_DEPTH_FLAG_KNEE_ANGLE   = 110.0   # knee angle at bottom > this => shallow
+# knee angle at bottom > _DEPTH_FLAG_KNEE_ANGLE => shallow. Imported from
+# squat.py above, because the overlay needs the same number to colour a shallow
+# rep and cannot import this module (squat_cues imports squat, not the reverse).
 # forward lean is relative: trunk leading the shin by > LEAN_EXCESS_LIMIT
 # (imported from squat.py) flags as excessive — see that module for the rationale
 _KNEE_ASYMMETRY_DEG      =  10.0   # |knee_L - knee_R| at bottom > this => asym

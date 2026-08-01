@@ -114,3 +114,138 @@ def test_body_scale_is_hip_to_ankle_length():
 
 def test_pick_side_prefers_the_visible_leg():
     assert squat.pick_side(_landmark_stack(), [(0, 5, 9)]) == "left"
+
+
+# ---------------------------------------------------------------------------
+# Regressions found on a real phone upload, 29 Jul 2026
+# ---------------------------------------------------------------------------
+
+def test_one_impossible_travel_does_not_bin_every_real_rep():
+    """The bug: subject walks back toward the camera at the end of the clip, the
+    hips 'travel' 2.9x leg length in that segment, and because the relative floor
+    calibrates against the biggest travel in the clip, all six genuine reps
+    measure ~0.15 against the artefact and get discarded as noise. The system
+    then reported the artefact as the only rep it found."""
+    scale = 0.35
+    # six real reps at ~0.45 of leg length, then one impossible one
+    reps = [(i * 100, i * 100 + 40, i * 100 + 90) for i in range(7)]
+    hip_y = np.zeros(700)
+    for i in range(6):
+        hip_y[i * 100 + 40] = 0.16          # a real squat
+    hip_y[640] = 1.02                        # tracking coming apart
+
+    kept = squat.keep_real_reps(reps, hip_y, scale)
+
+    assert len(kept) == 6, "real reps were binned because of the outlier"
+    assert (600, 640, 690) not in kept, "the impossible travel was kept as a rep"
+
+
+def test_travel_ceiling_scales_with_the_person():
+    """It's a multiple of leg length, not a pixel number — someone filmed close up
+    and someone filmed across a gym must be judged the same way."""
+    reps = [(0, 40, 90)]
+    hip_y = np.zeros(100)
+    hip_y[40] = 0.5
+
+    # 0.5 travel on a 0.6 leg is fine; the same travel on a 0.2 leg is not a squat
+    assert len(squat.keep_real_reps(reps, hip_y, scale=0.6)) == 1
+    assert len(squat.keep_real_reps(reps, hip_y, scale=0.2)) == 0
+
+
+def test_all_travels_implausible_falls_back_rather_than_dividing_by_nothing():
+    reps = [(0, 40, 90), (100, 140, 190)]
+    hip_y = np.zeros(200)
+    hip_y[40] = 2.0
+    hip_y[140] = 2.2
+    # shouldn't raise; the status machinery deals with the resulting mess
+    squat.keep_real_reps(reps, hip_y, scale=0.35)
+
+
+def _lean_frame(spine, shin, knee=90.0):
+    return {"knee_left": knee, "knee_right": knee, "spine": spine,
+            "shin_left": shin, "shin_right": shin}
+
+
+def test_flag_frames_marks_the_torso_while_the_lean_is_happening():
+    """Previously only the single worst frame was ever flagged — one frame in six
+    hundred, which at 30fps is invisible, so the overlay looked all-green however
+    the set went."""
+    angles = ([_lean_frame(20, 18)] * 10          # upright, trunk near shin
+              + [_lean_frame(60, 25)] * 10        # +35 excess — well over the limit
+              + [_lean_frame(20, 18)] * 10)
+    flagged = squat.flag_frames(angles, reps=[], side="left")
+
+    assert all(not f for f in flagged[:10]), "flagged a frame that was upright"
+    assert all("left_shoulder" in f and "left_hip" in f for f in flagged[10:20])
+    assert all(not f for f in flagged[20:]), "lean flag outlived the lean"
+
+
+def test_flag_frames_leaves_invalid_frames_alone():
+    """A frame that fails the validity gate is a tracking glitch — withhold the
+    judgement rather than colouring it, same principle as the cue layer."""
+    angles = [_lean_frame(200, 10)] * 5      # spine past MAX_PLAUSIBLE_LEAN
+    assert all(not f for f in squat.flag_frames(angles, reps=[], side="left"))
+
+
+def test_flag_frames_marks_a_shallow_rep_only_near_the_bottom():
+    """Depth is a per-rep property. The descent itself isn't the fault, so the
+    whole rep shouldn't turn red."""
+    deep = _lean_frame(20, 18, knee=170.0)
+    shallow_bottom = _lean_frame(20, 18, knee=140.0)   # never got below 110
+    angles = [deep] * 20 + [shallow_bottom] + [deep] * 20
+
+    flagged = squat.flag_frames(angles, reps=[(0, 20, 40)], side="left",
+                                depth_window=3)
+
+    assert "left_knee" in flagged[20]
+    assert "left_knee" in flagged[18] and "left_knee" in flagged[22]
+    assert not flagged[0] and not flagged[40], "flagged the whole rep, not the bottom"
+
+
+def test_flag_frames_leaves_a_deep_rep_unflagged():
+    deep_bottom = _lean_frame(20, 18, knee=70.0)
+    angles = [_lean_frame(20, 18, knee=170.0)] * 20 + [deep_bottom]
+    flagged = squat.flag_frames(angles, reps=[(0, 20, 20)], side="left")
+    assert all(not f for f in flagged)
+
+
+def _standing(knee=170.0):
+    return {"knee_left": knee, "knee_right": knee, "spine": 8.0,
+            "shin_left": 10.0, "shin_right": 10.0}
+
+
+def test_a_dip_where_the_knee_never_bends_is_not_a_rep():
+    """Hip travel says something moved, not what. Someone settling into position
+    dropped their hips ~0.2 of a leg length — over the travel floor — while the
+    knee stayed at 154 degrees. It counted as a rep, scored least-bad, and so
+    became the 'worst form' key frame: the headline image was a photo of someone
+    standing still."""
+    reps = [(0, 40, 90)]
+    hip_y = np.zeros(100)
+    hip_y[40] = 0.08
+    angles = [_standing(154.0)] * 100
+
+    assert squat.keep_real_reps(reps, hip_y, 0.35, angles_per_frame=angles,
+                                side="left", fps=30.0) == []
+
+
+def test_a_genuinely_shallow_squat_still_counts():
+    """The point of judging by travel was that shallow reps survive to be counted
+    and then flagged shallow. A flexion gate must not undo that."""
+    reps = [(0, 40, 90)]
+    hip_y = np.zeros(100)
+    hip_y[40] = 0.16
+    angles = [_standing(170.0)] * 100
+    angles[40] = _standing(135.0)      # shallow, but unmistakably a squat
+
+    kept = squat.keep_real_reps(reps, hip_y, 0.35, angles_per_frame=angles,
+                                side="left", fps=30.0)
+    assert kept == [(0, 40, 90)]
+
+
+def test_flexion_gate_is_skipped_when_no_angles_are_given():
+    """Travel-only behaviour stays available; the gate is additive."""
+    reps = [(0, 40, 90)]
+    hip_y = np.zeros(100)
+    hip_y[40] = 0.16
+    assert squat.keep_real_reps(reps, hip_y, 0.35) == [(0, 40, 90)]

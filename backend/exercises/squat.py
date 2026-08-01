@@ -51,6 +51,28 @@ W_SPINE = 1.0
 # is a tracking glitch — exclude such frames rather than scoring garbage.
 MAX_PLAUSIBLE_LEAN = 85.0
 
+# Ceiling on how far the hips may travel in a single rep, as a multiple of leg
+# length. A deep squat moves the hips roughly 0.4-0.6 of a leg length; anything
+# approaching a whole leg length is not a squat. Set well clear of real movement
+# at 1.0 so it only ever catches the tracking falling apart — a subject walking
+# out of or back into frame, or a landmark snapping across the image.
+MAX_PLAUSIBLE_HIP_TRAVEL = 1.0
+
+# Knee angle at the deepest point above which a rep counts as shallow. Lives here
+# rather than in squat_cues so the overlay can use it without importing the cue
+# database (squat_cues already imports from this module, so the arrow only points
+# one way).
+DEPTH_FLAG_KNEE_ANGLE = 110.0
+
+# The knee has to bend at least this far for a dip to count as a rep at all.
+# Distinct from DEPTH_FLAG_KNEE_ANGLE, and the distinction matters: 110 is "was
+# the squat deep enough", this is "did a squat happen". Standing is 170-180, a
+# quarter squat about 140-150, so requiring 30 degrees of flexion rejects someone
+# shifting their weight while still letting a genuinely shallow rep through to be
+# counted and then flagged as shallow — which is the behaviour the travel test
+# was chosen to preserve in the first place.
+MIN_REP_KNEE_FLEXION = 150.0
+
 
 def frame_valid(angle_dict, side):
     """True if a frame is usable for scoring: the chosen-side knee is present and
@@ -102,17 +124,30 @@ def body_scale(landmarks):
               leg_len("right_hip", "right_ankle"))
 
 
-def keep_real_reps(reps, hip_y, scale, abs_floor=0.10, rel_floor=0.35):
+def keep_real_reps(reps, hip_y, scale, abs_floor=0.10, rel_floor=0.35,
+                   max_travel=MAX_PLAUSIBLE_HIP_TRAVEL,
+                   angles_per_frame=None, side="left", fps=30.0):
     """Decide which detected bottoms are genuine reps by HIP TRAVEL, not knee
-    angle. Two checks:
+    angle. Three checks:
+      - ceiling: travel <= max_travel * leg length — anything above that is not a
+        squat, it is the tracking coming apart (see below).
       - absolute: travel >= abs_floor * leg length — rejects clips that are all
         jitter (no real movement at all).
-      - relative: travel >= rel_floor * the largest travel in THIS clip — self-
-        calibrates per clip, so real reps survive and noise zero-crossings drop
-        out without any per-upload tuning.
+      - relative: travel >= rel_floor * the largest PLAUSIBLE travel in THIS clip
+        — self-calibrates per clip, so real reps survive and noise zero-crossings
+        drop out without any per-upload tuning.
     Keeping the travel test (rather than a knee-angle cutoff) means genuinely
     SHALLOW squats survive and can fire the shallow-depth cue, instead of being
-    silently discarded as 'not a rep'."""
+    silently discarded as 'not a rep'.
+
+    The ceiling has to be applied BEFORE the relative floor calibrates, and that
+    ordering is the whole point of it. On a real upload the subject walked back
+    toward the camera at the end of the clip; the hips travelled 2.9x leg length
+    in that segment, which is not a movement a human makes. That one glitch
+    became `biggest`, every genuine rep measured about 0.15 against it, and all
+    six real reps were binned as noise while the artefact was kept and reported
+    as the only rep. Self-calibration is only safe once obvious nonsense is out
+    of the sample it calibrates against."""
     travels = []
     for (s, b, e) in reps:
         w = hip_y[s:e + 1]
@@ -120,14 +155,109 @@ def keep_real_reps(reps, hip_y, scale, abs_floor=0.10, rel_floor=0.35):
         travels.append(float(w.max() - w.min()) if w.size else 0.0)
     if not travels:
         return []
-    biggest = max(travels)
+
+    def implausible(t):
+        return scale > 0 and (t / scale) > max_travel
+
+    plausible = [t for t in travels if not implausible(t)]
+    # if everything looks impossible the clip is a mess anyway — fall back to the
+    # old behaviour rather than dividing by nothing, and let the abs_floor and
+    # the detection-rate status machinery have the final word
+    biggest = max(plausible) if plausible else max(travels)
+
     keep = []
     for (s, b, e), t in zip(reps, travels):
+        if implausible(t):
+            continue
         norm = t / scale   if scale   > 0 else 0.0
         rel  = t / biggest if biggest > 0 else 0.0
-        if norm >= abs_floor and rel >= rel_floor:
-            keep.append((s, b, e))
+        if not (norm >= abs_floor and rel >= rel_floor):
+            continue
+        if not _knee_actually_bent(angles_per_frame, s, b, e, side, fps):
+            continue
+        keep.append((s, b, e))
     return keep
+
+
+def _knee_actually_bent(angles_per_frame, s, b, e, side, fps):
+    """Did the knee bend far enough near this bottom for a squat to have happened?
+
+    Hip travel alone says something moved, not what. On a real upload the subject
+    settled into position at the start of the clip: the hips dropped about 0.2 of
+    a leg length, enough to clear the travel floor, while the knee never went past
+    154 degrees — standing, not squatting. That got counted as a rep, and because
+    its score was the least bad it became the 'worst form' key frame, so the
+    headline image was a photo of someone standing still near the top of the clip.
+
+    Skipped entirely when no angles are supplied, so the travel-only behaviour is
+    still available on its own.
+    """
+    if angles_per_frame is None:
+        return True
+    lo, hi = _eval_window(s, b, e, fps)
+    f = deepest_frame(angles_per_frame, lo, hi, side)
+    if f is None:
+        return False
+    knee = angles_per_frame[f].get(_knee_key(side))
+    if knee is None or not np.isfinite(knee):
+        return False
+    return knee <= MIN_REP_KNEE_FLEXION
+
+
+def flag_frames(angles_per_frame, reps, side, depth_window=8):
+    """Which joints to draw in fault colour, PER FRAME, for the overlay video.
+
+    Previously only the single worst frame was flagged, which meant one frame in
+    six hundred was ever red — a 30th of a second, invisible at playback speed,
+    so the overlay looked uniformly green no matter how the set went. The colour
+    is supposed to show *when* form breaks down, so it has to track the
+    measurement frame by frame.
+
+    Two faults are marked, and only where they are actually measurable:
+      - forward lean: any valid frame where the trunk leads the shin by more than
+        LEAN_EXCESS_LIMIT. Genuinely per-frame, so the torso reddens exactly
+        while the lean is happening.
+      - shallow depth: a per-REP property, not a per-frame one, so it marks the
+        knee and hip around the deepest point of any rep that never got low
+        enough. Marking the whole rep would be wrong — the descent itself is fine.
+
+    Frames that fail the validity gate are left unflagged rather than guessed at,
+    and the renderer independently fades anything below the visibility threshold,
+    so a joint MediaPipe is unsure about can never be shown as confidently bad."""
+    n = len(angles_per_frame)
+    out = [set() for _ in range(n)]
+    shin_key = "shin_left" if side == "left" else "shin_right"
+    knee_key = _knee_key(side)
+
+    for i, ang in enumerate(angles_per_frame):
+        if not frame_valid(ang, side):
+            continue
+        spine = ang.get("spine")
+        shin = ang.get(shin_key)
+        if (spine is not None and shin is not None
+                and np.isfinite(spine) and np.isfinite(shin)
+                and (spine - shin) > LEAN_EXCESS_LIMIT):
+            out[i] |= {"left_shoulder", "right_shoulder", "left_hip", "right_hip"}
+
+    for (s, b, e) in reps:
+        deepest, knee_min = None, None
+        for i in range(max(0, s), min(n, e + 1)):
+            if not frame_valid(angles_per_frame[i], side):
+                continue
+            k = angles_per_frame[i].get(knee_key)
+            if k is None or not np.isfinite(k):
+                continue
+            if knee_min is None or k < knee_min:
+                deepest, knee_min = i, k
+        if deepest is None or knee_min <= DEPTH_FLAG_KNEE_ANGLE:
+            continue
+        lo = max(0, deepest - depth_window)
+        hi = min(n - 1, deepest + depth_window)
+        for i in range(lo, hi + 1):
+            if frame_valid(angles_per_frame[i], side):
+                out[i] |= {f"{side}_knee", f"{side}_hip"}
+
+    return out
 
 
 def deepest_frame(angles_per_frame, start, end, side):

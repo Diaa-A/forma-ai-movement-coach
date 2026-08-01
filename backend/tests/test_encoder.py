@@ -127,3 +127,41 @@ def test_zero_fps_does_not_explode(tmp_path):
     enc = VideoEncoder(tmp_path / "z.mp4", fps=0, width=64, height=48)
     assert enc.fps == 30.0
     enc.close()
+
+
+# ---------------------------------------------------------------------------
+# Exact frame reads (render.read_frames_exact)
+# ---------------------------------------------------------------------------
+
+@needs_ffmpeg
+def test_read_frames_exact_returns_the_frame_actually_asked_for(tmp_path):
+    """cv2's CAP_PROP_POS_FRAMES seek is approximate on plenty of real files. On a
+    621-frame .mov off a phone it returned frame 40 for 44, 196 for 200, 574 for
+    575 — small, but the landmarks drawn onto a key frame come from the index we
+    asked for, so an off-by-four puts the skeleton where the body isn't.
+
+    Each frame carries its index as the POSITION of a white stripe. Position
+    survives the encode; brightness does not — yuv420p is limited-range, so a
+    grey of 28 comes back as 24 and an absolute pixel value would fail for
+    reasons that have nothing to do with which frame was read.
+    """
+    from backend.pipeline.render import read_frames_exact
+
+    out = tmp_path / "counted.mp4"
+    with VideoEncoder(out, fps=30, width=64, height=48) as enc:
+        for i in range(60):
+            f = np.zeros((48, 64, 3), dtype=np.uint8)
+            f[:, i:i + 2] = 255            # stripe sits at column == frame index
+            enc.write(f)
+
+    got = read_frames_exact(out, [7, 23, 55])
+    assert sorted(got) == [7, 23, 55]
+    for idx in (7, 23, 55):
+        stripe = int(got[idx][:, :, 0].mean(axis=0).argmax())
+        assert abs(stripe - idx) <= 1, f"asked for frame {idx}, got the one at {stripe}"
+
+
+def test_read_frames_exact_handles_nothing_to_read(tmp_path):
+    from backend.pipeline.render import read_frames_exact
+    assert read_frames_exact(tmp_path / "nope.mp4", []) == {}
+    assert read_frames_exact(tmp_path / "nope.mp4", [None]) == {}

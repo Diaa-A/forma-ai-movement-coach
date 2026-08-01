@@ -20,7 +20,7 @@ from .pose import extract_landmarks, LM, N_LANDMARKS
 from .filter import smooth_series
 from .angles import squat_angles_per_frame
 from .phase_detection import detect_bottoms, segment_reps, label_phases
-from .render import render_video, save_key_frame
+from .render import render_video, save_key_frame, read_frames_exact
 from .coaching import (
     generate_coaching_report, not_analyzed_report,
     DEFAULT_MODEL as DEFAULT_LLM_MODEL,
@@ -131,7 +131,8 @@ def run_squat_pipeline(input_path, output_root, options: RunOptions = None,
     reps_all = segment_reps(bottoms, n_frames)
     side = squat.pick_side(lm_smooth, reps_all)
     scale = squat.body_scale(lm_smooth)
-    reps = squat.keep_real_reps(reps_all, hip_y_smooth, scale)
+    reps = squat.keep_real_reps(reps_all, hip_y_smooth, scale,
+                                angles_per_frame=angles, side=side, fps=fps)
     phases = label_phases(reps, n_frames)
     scores = squat.score_reps(angles, reps, side, fps)   # (eval_frame, score, breakdown)
     worst_idx = squat.worst_frame(angles, reps, side, fps)
@@ -149,14 +150,10 @@ def run_squat_pipeline(input_path, output_root, options: RunOptions = None,
     else:
         status = "ok"
 
-    flagged = [set() for _ in range(n_frames)]
-    if worst_idx is not None:
-        worst_breakdown = next((bd for (f, _, bd) in scores if f == worst_idx), {})
-        if (worst_breakdown.get("lean") or 0) >= (worst_breakdown.get("depth") or 0):
-            flagged[worst_idx] |= {"left_shoulder", "right_shoulder",
-                                   "left_hip", "right_hip"}
-        else:
-            flagged[worst_idx] |= {f"{side}_knee", f"{side}_hip"}
+    # Fault colouring for the overlay, evaluated per frame rather than only on the
+    # single worst one — one red frame in six hundred is a 30th of a second and
+    # reads as "nothing was ever wrong". See squat.flag_frames.
+    flagged = squat.flag_frames(angles, reps, side)
 
     # -- write angles.json (with world landmarks for the Fit3D path)
     angles_path = out_dir / "angles.json"
@@ -191,16 +188,22 @@ def run_squat_pipeline(input_path, output_root, options: RunOptions = None,
     render_video(in_path, lm_smooth, angles, annotated_path,
                  flagged_per_frame=flagged)
 
+    # one exact decode pass for both key frames — see read_frames_exact for why
+    # this isn't a seek
+    key_frames = read_frames_exact(in_path, [worst_idx, best_idx])
+
     worst_path = None
     best_path  = None
-    if worst_idx is not None:
+    if worst_idx is not None and worst_idx in key_frames:
         worst_path = out_dir / "worst.jpg"
         save_key_frame(in_path, worst_idx, lm_smooth[worst_idx], angles[worst_idx],
-                       worst_path, flagged[worst_idx], label="worst", side=side)
-    if best_idx is not None:
+                       worst_path, flagged[worst_idx], label="worst", side=side,
+                       frame=key_frames[worst_idx])
+    if best_idx is not None and best_idx in key_frames:
         best_path = out_dir / "best.jpg"
         save_key_frame(in_path, best_idx, lm_smooth[best_idx], angles[best_idx],
-                       best_path, set(), label="best", side=side)
+                       best_path, set(), label="best", side=side,
+                       frame=key_frames[best_idx])
 
     summary = _build_summary(angles, reps, side, scores)
     summary["status"] = status

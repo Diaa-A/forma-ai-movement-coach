@@ -133,17 +133,56 @@ def render_video(input_path, landmarks_all, angles_all, output_path,
     return output_path
 
 
+def read_frames_exact(input_path, indices):
+    """Decode forward to each wanted frame and return {index: frame}.
+
+    Deliberately NOT cv2's CAP_PROP_POS_FRAMES seek. That seek is approximate on
+    plenty of real files — on a 621-frame .mov straight off a phone, asking for
+    frame 44 returned frame 40, 200 returned 196, 575 returned 574. Small, but the
+    landmarks drawn on a key frame come from the index we asked for, so a seek
+    that lands four frames early puts the skeleton somewhere the body no longer
+    is, and the reported timestamp is wrong too.
+
+    Sequential decode is exact by construction. It costs one pass, stopping at the
+    last index we need — about 2 ms a frame, so well under a second for a normal
+    clip, against a ~12 s pipeline.
+    """
+    wanted = sorted({int(i) for i in indices if i is not None and i >= 0})
+    if not wanted:
+        return {}
+
+    cap = cv2.VideoCapture(str(input_path))
+    if not cap.isOpened():
+        raise RuntimeError(f"could not open input video: {input_path}")
+
+    out, last, i = {}, wanted[-1], 0
+    remaining = set(wanted)
+    while i <= last:
+        ok, frame = cap.read()
+        if not ok:
+            break
+        if i in remaining:
+            out[i] = frame.copy()
+            remaining.discard(i)
+        i += 1
+    cap.release()
+    return out
+
+
 def save_key_frame(input_path, frame_idx, landmarks_frame, angle_frame,
-                   output_path, flagged_joints=None, label="", side=None):
-    """Grab a single frame from the source video and save it with overlay + label.
+                   output_path, flagged_joints=None, label="", side=None,
+                   frame=None):
+    """Save one frame with overlay + label.
+
+    Pass `frame` if you already decoded it (see read_frames_exact) — otherwise
+    this reads it, exactly, itself.
 
     When `side` is given, the trunk-vs-shin relationship (the basis of the forward
     lean cue) is shown explicitly, so the figure explains why a frame was flagged."""
-    cap = cv2.VideoCapture(str(input_path))
-    cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
-    ok, frame = cap.read()
-    cap.release()
-    if not ok:
+    if frame is None:
+        got = read_frames_exact(input_path, [frame_idx])
+        frame = got.get(frame_idx)
+    if frame is None:
         raise RuntimeError(f"could not read frame {frame_idx} from {input_path}")
 
     trunk = angle_frame.get("spine")
