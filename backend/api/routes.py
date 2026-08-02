@@ -148,6 +148,7 @@ def _build_response(result: RunResult, exercise_type: str) -> AnalyzeResponse:
             url=f"{base}/{result.worst_frame_path.name}",
             label="worst",
             timestamp=(idx / angles_payload["fps"]) if idx is not None else 0.0,
+            highlighted=bool(angles_payload.get("worst_frame_flagged")),
         ))
     if result.best_frame_path:
         idx = angles_payload.get("best_frame")

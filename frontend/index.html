@@ -20,6 +20,24 @@
   <body>
     <div id="root"></div>
     <noscript>This app needs JavaScript to upload and display your analysis.</noscript>
+
+    <!-- Catch beforeinstallprompt HERE rather than in React.
+         Chrome fires it early in page load, usually before a module bundle has
+         finished parsing and mounted, so a listener added in an effect misses it
+         and the install button never appears. Stash it on window and let the
+         component pick it up whenever it gets around to mounting. -->
+    <script>
+      window.__installEvent = null
+      window.addEventListener('beforeinstallprompt', function (e) {
+        e.preventDefault()
+        window.__installEvent = e
+        window.dispatchEvent(new Event('installpromptready'))
+      })
+      window.addEventListener('appinstalled', function () {
+        window.__installEvent = null
+      })
+    </script>
+
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -249,3 +249,49 @@ def test_flexion_gate_is_skipped_when_no_angles_are_given():
     hip_y = np.zeros(100)
     hip_y[40] = 0.16
     assert squat.keep_real_reps(reps, hip_y, 0.35) == [(0, 40, 90)]
+
+
+def _rep_frames(n, deepest_at, deepest_knee, knee_top=175.0):
+    """A rep's worth of frames with a single deepest point."""
+    frames = []
+    for i in range(n):
+        knee = deepest_knee if i == deepest_at else knee_top
+        frames.append({"knee_left": knee, "knee_right": knee, "spine": 20.0,
+                       "shin_left": 18.0, "shin_right": 18.0})
+    return frames
+
+
+def test_settling_into_position_is_not_counted_as_a_rep():
+    """From a 4K phone upload: the first detected bottom was the subject settling
+    before starting. Knee reached 137.8 degrees (about 42 of bend) against 34-48
+    degrees (132-146 of bend) for the four genuine reps. It was counted, scored
+    least-bad, and became the 'worst form' key frame — so the headline image was
+    the user standing still."""
+    angles = (_rep_frames(100, 50, 137.8) + _rep_frames(100, 50, 34.2)
+              + _rep_frames(100, 50, 47.8) + _rep_frames(100, 50, 39.9))
+    reps = [(i * 100, i * 100 + 50, i * 100 + 99) for i in range(4)]
+    hip_y = np.zeros(400)
+    for i in range(4):
+        hip_y[i * 100 + 50] = 0.16
+
+    kept = squat.keep_real_reps(reps, hip_y, 0.35, angles_per_frame=angles,
+                                side="left", fps=30.0)
+
+    assert (0, 50, 99) not in kept, "the settling movement was counted as a rep"
+    assert len(kept) == 3
+
+
+def test_a_set_of_uniformly_shallow_squats_all_survive():
+    """The ratio is against the deepest rep in the SAME clip, so someone who only
+    ever quarter-squats still gets counted — and then told they were shallow.
+    Rejecting them outright would be the system deciding they didn't exercise."""
+    angles = (_rep_frames(100, 50, 130.0) + _rep_frames(100, 50, 128.0)
+              + _rep_frames(100, 50, 133.0))
+    reps = [(i * 100, i * 100 + 50, i * 100 + 99) for i in range(3)]
+    hip_y = np.zeros(300)
+    for i in range(3):
+        hip_y[i * 100 + 50] = 0.16
+
+    kept = squat.keep_real_reps(reps, hip_y, 0.35, angles_per_frame=angles,
+                                side="left", fps=30.0)
+    assert len(kept) == 3

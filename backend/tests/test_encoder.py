@@ -165,3 +165,39 @@ def test_read_frames_exact_handles_nothing_to_read(tmp_path):
     from backend.pipeline.render import read_frames_exact
     assert read_frames_exact(tmp_path / "nope.mp4", []) == {}
     assert read_frames_exact(tmp_path / "nope.mp4", [None]) == {}
+
+
+# ---------------------------------------------------------------------------
+# Overlay geometry scales with the frame (render._scale)
+# ---------------------------------------------------------------------------
+
+def test_overlay_geometry_scales_with_resolution():
+    """Fixed 3px limbs and 5px joints look right on the 576x1024 development
+    clips and are a hairline on the 2160x3840 a phone actually records. Reported
+    from a real device as 'the skeleton is thin and does not look better'."""
+    from backend.pipeline.render import _scale
+
+    small = _scale(576, 1024)
+    big = _scale(2160, 3840)
+
+    assert big["limb"] > small["limb"] * 3, "limbs did not scale up for 4K"
+    assert big["joint"] > small["joint"] * 3
+    assert big["font"] > small["font"] * 2
+
+    # and the old look is roughly preserved where the report figures were made
+    assert 4 <= small["limb"] <= 6
+    assert 5 <= small["joint"] <= 9
+
+
+def test_overlay_stays_visible_on_a_tiny_frame():
+    """Floors matter too — a thumbnail-sized clip must not end up with 0px lines."""
+    from backend.pipeline.render import _scale
+    tiny = _scale(120, 160)
+    assert tiny["limb"] >= 3 and tiny["joint"] >= 4 and tiny["thin"] >= 1
+
+
+def test_scale_is_orientation_independent():
+    """Keyed to the short edge, so the same clip portrait and landscape gets the
+    same weight of line."""
+    from backend.pipeline.render import _scale
+    assert _scale(1080, 1920) == _scale(1920, 1080)

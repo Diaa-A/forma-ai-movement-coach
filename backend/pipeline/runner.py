@@ -177,6 +177,12 @@ def run_squat_pipeline(input_path, output_root, options: RunOptions = None,
         "phase_per_frame": phases,
         "worst_frame": worst_idx,
         "best_frame":  best_idx,
+        # Did anything actually get marked as a fault on the worst frame? On a
+        # clean set nothing does, and then calling the image "worst form" sends
+        # the user hunting for a red limb that was never there. The label and the
+        # caption both key off this.
+        "worst_frame_flagged": bool(worst_idx is not None and flagged[worst_idx]),
+        "worst_frame_joints": sorted(flagged[worst_idx]) if worst_idx is not None else [],
         "angles_per_frame": _angles_jsonable(angles),
         "world_landmarks": _world_jsonable(pose_data["world_landmarks"]),
     }
@@ -196,8 +202,10 @@ def run_squat_pipeline(input_path, output_root, options: RunOptions = None,
     best_path  = None
     if worst_idx is not None and worst_idx in key_frames:
         worst_path = out_dir / "worst.jpg"
+        # only call it the worst if something is actually marked on it
+        worst_label = "worst form" if flagged[worst_idx] else "closest to the limit"
         save_key_frame(in_path, worst_idx, lm_smooth[worst_idx], angles[worst_idx],
-                       worst_path, flagged[worst_idx], label="worst", side=side,
+                       worst_path, flagged[worst_idx], label=worst_label, side=side,
                        frame=key_frames[worst_idx])
     if best_idx is not None and best_idx in key_frames:
         best_path = out_dir / "best.jpg"

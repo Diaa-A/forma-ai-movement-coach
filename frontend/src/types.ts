@@ -22,6 +22,9 @@ export interface KeyFrame {
   url: string
   label: string
   timestamp: number
+  /** whether joints were actually marked as at fault on this frame — decides
+   *  whether the caption promises the user something to look at */
+  highlighted?: boolean
 }
 
 export interface RepStat {

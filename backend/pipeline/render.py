@@ -34,6 +34,36 @@ UNCERTAIN = (140, 140, 140)  # muted grey for low-confidence joints
 # that collapses toward the near side) must not be presented as a confident one.
 
 
+def _scale(w, h):
+    """Overlay geometry as a fraction of the frame, not a pixel count.
+
+    Everything here used to be fixed — 3px limbs, 5px joints, 0.7 font. That is
+    fine on the 576x1024 development clips and close to invisible on the 2160x3840
+    a modern phone actually records: a 3px line across a 4K frame is a hairline,
+    and the angle readout ends up unreadable. Phones keep getting more pixels, so
+    scaling off the frame is the only version that keeps working.
+
+    Keyed to the SHORT edge, so a portrait clip and the same clip landscape get
+    the same weight of line. Floors keep it visible on small inputs; the numbers
+    are tuned to reproduce roughly the old look at 576 wide, which is what the
+    existing report figures were made at."""
+    # Fractions calibrated against the render people said looked right: a 3px limb
+    # and 5px joint on a 360x480 clip, i.e. about 0.85% and 1.2% of the short
+    # edge. Anything meaningfully finer reads as a hairline once the frame gets
+    # big, which is what a 4K upload showed.
+    ref = min(w, h)
+    return {
+        "limb": max(3, round(ref * 0.0085)),
+        "joint": max(5, round(ref * 0.012)),
+        "thin": max(1, round(ref * 0.003)),
+        "font": max(0.6, ref * 0.0017),
+        "font_thick": max(1, round(ref * 0.003)),
+        "outline": max(3, round(ref * 0.008)),
+        "line_step": max(24, round(ref * 0.058)),
+        "margin": max(10, round(ref * 0.025)),
+    }
+
+
 def _pt(landmark, w, h):
     """Normalised landmark to pixel coords. Returns None for NaN."""
     x, y = landmark[0], landmark[1]
@@ -55,6 +85,7 @@ def draw_overlay(frame_bgr, landmarks_frame, flagged_joints=None, info_text=None
     confidently tracked one."""
     flagged = flagged_joints or set()
     h, w = frame_bgr.shape[:2]
+    s = _scale(w, h)
 
     # edges
     for a_name, b_name in _EDGES:
@@ -66,10 +97,10 @@ def draw_overlay(frame_bgr, landmarks_frame, flagged_joints=None, info_text=None
                      and _vis(landmarks_frame[LM[b_name]]) >= VISIBILITY_THRESHOLD)
         if confident:
             colour = BAD if (a_name in flagged or b_name in flagged) else GOOD
-            cv2.line(frame_bgr, a, b, colour, 3, cv2.LINE_AA)
+            cv2.line(frame_bgr, a, b, colour, s["limb"], cv2.LINE_AA)
         else:
             # uncertain limb (e.g. occluded far leg) — faint and thin
-            cv2.line(frame_bgr, a, b, UNCERTAIN, 1, cv2.LINE_AA)
+            cv2.line(frame_bgr, a, b, UNCERTAIN, s["thin"], cv2.LINE_AA)
 
     # joint dots
     for name, idx in LM.items():
@@ -78,19 +109,22 @@ def draw_overlay(frame_bgr, landmarks_frame, flagged_joints=None, info_text=None
             continue
         if _vis(landmarks_frame[idx]) >= VISIBILITY_THRESHOLD:
             col = BAD if name in flagged else NEUTRAL
-            cv2.circle(frame_bgr, p, 5, col, -1, cv2.LINE_AA)
+            cv2.circle(frame_bgr, p, s["joint"], col, -1, cv2.LINE_AA)
         else:
             # low-confidence joint — small hollow marker, not a solid confident dot
-            cv2.circle(frame_bgr, p, 4, UNCERTAIN, 1, cv2.LINE_AA)
+            cv2.circle(frame_bgr, p, max(3, s["joint"] - 1), UNCERTAIN,
+                       s["thin"], cv2.LINE_AA)
 
     if info_text:
-        y0 = 30
+        y0 = s["line_step"]
         for line in info_text.split("\n"):
-            cv2.putText(frame_bgr, line, (12, y0), cv2.FONT_HERSHEY_SIMPLEX,
-                        0.7, (0, 0, 0), 4, cv2.LINE_AA)
-            cv2.putText(frame_bgr, line, (12, y0), cv2.FONT_HERSHEY_SIMPLEX,
-                        0.7, (240, 240, 240), 1, cv2.LINE_AA)
-            y0 += 26
+            # dark outline under light text so it stays readable over a bright
+            # gym floor or a window
+            cv2.putText(frame_bgr, line, (s["margin"], y0), cv2.FONT_HERSHEY_SIMPLEX,
+                        s["font"], (0, 0, 0), s["outline"], cv2.LINE_AA)
+            cv2.putText(frame_bgr, line, (s["margin"], y0), cv2.FONT_HERSHEY_SIMPLEX,
+                        s["font"], (240, 240, 240), s["font_thick"], cv2.LINE_AA)
+            y0 += s["line_step"]
 
     return frame_bgr
 

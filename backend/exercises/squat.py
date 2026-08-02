@@ -64,14 +64,23 @@ MAX_PLAUSIBLE_HIP_TRAVEL = 1.0
 # one way).
 DEPTH_FLAG_KNEE_ANGLE = 110.0
 
-# The knee has to bend at least this far for a dip to count as a rep at all.
-# Distinct from DEPTH_FLAG_KNEE_ANGLE, and the distinction matters: 110 is "was
-# the squat deep enough", this is "did a squat happen". Standing is 170-180, a
-# quarter squat about 140-150, so requiring 30 degrees of flexion rejects someone
-# shifting their weight while still letting a genuinely shallow rep through to be
-# counted and then flagged as shallow — which is the behaviour the travel test
-# was chosen to preserve in the first place.
-MIN_REP_KNEE_FLEXION = 150.0
+# The knee has to bend for a dip to count as a rep at all. Distinct from
+# DEPTH_FLAG_KNEE_ANGLE, and the distinction matters: 110 is "was the squat deep
+# enough", this is "did a squat happen".
+#
+# Absolute floor: 30 degrees of bend off straight. Loose on purpose — it only
+# catches someone standing still.
+MIN_REP_KNEE_FLEXION = 30.0
+# Relative floor: a rep must bend at least this fraction of the deepest bend in
+# the same clip. Same self-calibrating idea as the hip-travel test, and it is the
+# check that does the real work. On a 4K upload the first detected "rep" was the
+# subject settling into position — knee reached 137.8 degrees, about 42 of bend,
+# while the four genuine reps reached 34-48 degrees, about 132-146 of bend. An
+# absolute cut sitting between those is a number fitted to one clip; a ratio is
+# not, and it still lets a set of uniformly shallow squats through to be counted
+# and then flagged shallow, which is the whole reason the rep test is by movement
+# rather than by depth.
+MIN_REP_FLEXION_RATIO = 0.4
 
 
 def frame_valid(angle_dict, side):
@@ -165,43 +174,49 @@ def keep_real_reps(reps, hip_y, scale, abs_floor=0.10, rel_floor=0.35,
     # the detection-rate status machinery have the final word
     biggest = max(plausible) if plausible else max(travels)
 
-    keep = []
+    passed_travel = []
     for (s, b, e), t in zip(reps, travels):
         if implausible(t):
             continue
         norm = t / scale   if scale   > 0 else 0.0
         rel  = t / biggest if biggest > 0 else 0.0
-        if not (norm >= abs_floor and rel >= rel_floor):
-            continue
-        if not _knee_actually_bent(angles_per_frame, s, b, e, side, fps):
-            continue
-        keep.append((s, b, e))
-    return keep
+        if norm >= abs_floor and rel >= rel_floor:
+            passed_travel.append((s, b, e))
+
+    return _keep_reps_that_bent(passed_travel, angles_per_frame, side, fps)
 
 
-def _knee_actually_bent(angles_per_frame, s, b, e, side, fps):
-    """Did the knee bend far enough near this bottom for a squat to have happened?
+def _keep_reps_that_bent(reps, angles_per_frame, side, fps):
+    """Drop dips where the knee never really bent.
 
-    Hip travel alone says something moved, not what. On a real upload the subject
-    settled into position at the start of the clip: the hips dropped about 0.2 of
-    a leg length, enough to clear the travel floor, while the knee never went past
-    154 degrees — standing, not squatting. That got counted as a rep, and because
-    its score was the least bad it became the 'worst form' key frame, so the
-    headline image was a photo of someone standing still near the top of the clip.
+    Hip travel says something moved, not what. On a real upload the subject
+    settled into position before starting: the hips dropped enough to clear the
+    travel floor while the knee only reached 137.8 degrees — standing, not
+    squatting. It counted as a rep, scored least-bad among the set, and so became
+    the 'worst form' key frame. The headline image was a photo of someone standing
+    still before their first rep.
 
-    Skipped entirely when no angles are supplied, so the travel-only behaviour is
-    still available on its own.
+    Judged the same way hip travel is: an absolute floor to catch no-movement, and
+    a ratio against the deepest bend in this clip to catch a movement that is real
+    but nothing like the others. Skipped when no angles are supplied, so the
+    travel-only behaviour stays available on its own.
     """
-    if angles_per_frame is None:
-        return True
-    lo, hi = _eval_window(s, b, e, fps)
-    f = deepest_frame(angles_per_frame, lo, hi, side)
-    if f is None:
-        return False
-    knee = angles_per_frame[f].get(_knee_key(side))
-    if knee is None or not np.isfinite(knee):
-        return False
-    return knee <= MIN_REP_KNEE_FLEXION
+    if angles_per_frame is None or not reps:
+        return list(reps)
+
+    flexions = []
+    for (s, b, e) in reps:
+        lo, hi = _eval_window(s, b, e, fps)
+        f = deepest_frame(angles_per_frame, lo, hi, side)
+        knee = None if f is None else angles_per_frame[f].get(_knee_key(side))
+        if knee is None or not np.isfinite(knee):
+            flexions.append(0.0)
+        else:
+            flexions.append(max(0.0, 180.0 - float(knee)))
+
+    deepest = max(flexions) if flexions else 0.0
+    floor = max(MIN_REP_KNEE_FLEXION, deepest * MIN_REP_FLEXION_RATIO)
+    return [rep for rep, flex in zip(reps, flexions) if flex >= floor]
 
 
 def flag_frames(angles_per_frame, reps, side, depth_window=8):

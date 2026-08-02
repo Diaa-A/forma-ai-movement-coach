@@ -30,6 +30,11 @@ class KeyFrame(BaseModel):
     url: str
     label: str
     timestamp: float
+    # True when joints were actually marked as at fault on this frame. Additive,
+    # defaulted, so nothing that already reads this response breaks. The UI needs
+    # it to caption the image honestly: on a clean set there is no red limb to
+    # point at, and "where form drifted most" then sends the user looking for one.
+    highlighted: bool = False
 
 
 class RepStat(BaseModel):
