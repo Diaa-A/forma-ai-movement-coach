@@ -15,7 +15,7 @@ from typing import Optional
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
-from ..pipeline.runner import run_squat_pipeline, RunOptions, RunResult
+from ..pipeline.runner import run_pipeline, RunOptions, RunResult
 from ..exercises.registry import PROFILES, exercise_ids
 from .schemas import (AnalyzeResponse, KeyFrame, RepStat, CoachingReportOut,
                       ExerciseOut, ExercisesResponse)
@@ -120,8 +120,13 @@ def analyze(
         voice_audio_path=voice_path,
     )
     try:
-        result = run_squat_pipeline(video_path, OUTPUT_ROOT, options=opts,
-                                    job_id=job_id)
+        # exercise_type has to reach the pipeline, not just the job name. It
+        # previously did not: this called the squat-shaped alias, so a push-up
+        # upload was validated as a push-up, named pushup_<ts>, echoed back as a
+        # push-up, and then analysed as a squat. Everything downstream looked
+        # right except the measurements.
+        result = run_pipeline(video_path, OUTPUT_ROOT, exercise_type,
+                              options=opts, job_id=job_id)
     except FileNotFoundError as e:
         raise HTTPException(400, str(e))
     except Exception as e:

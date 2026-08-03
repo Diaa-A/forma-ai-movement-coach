@@ -59,3 +59,35 @@ def test_analyze_rejects_an_exercise_that_is_not_registered():
                     files={"video": ("x.mp4", b"not really a video", "video/mp4")})
     assert r.status_code == 400
     assert "deadlift" in r.json()["detail"]
+
+
+def test_analyze_runs_the_exercise_that_was_asked_for(monkeypatch):
+    """The API must pass exercise_type to the pipeline, not just into the job name.
+
+    It previously did not. `analyze()` called the squat-shaped alias, so a push-up
+    upload was validated as a push-up, written to pushup_<timestamp>/, and echoed
+    back with exercise_type "pushup" -- while the analysis ran the squat pipeline.
+    Every surface looked correct except the measurements, which came back as knee
+    angles and trunk lean for a person doing push-ups.
+
+    Nothing caught it: the endpoint tests covered /exercises and the rejection
+    branch, and the CLI was verified separately and was fine. This asserts the one
+    link that was missing, without needing a real video.
+    """
+    seen = {}
+
+    def fake_run(video_path, output_root, exercise="squat", options=None, job_id=None):
+        seen["exercise"] = exercise
+        seen["job_id"] = job_id
+        raise FileNotFoundError("stop here - we only care which exercise was requested")
+
+    monkeypatch.setattr("backend.api.routes.run_pipeline", fake_run)
+
+    for requested in ("pushup", "squat"):
+        seen.clear()
+        client.post("/analyze",
+                    data={"exercise_type": requested},
+                    files={"video": ("clip.mp4", b"not a real video", "video/mp4")})
+        assert seen.get("exercise") == requested, (
+            f"asked for {requested}, pipeline was told {seen.get('exercise')}")
+        assert seen["job_id"].startswith(requested)

@@ -295,3 +295,38 @@ li { margin-bottom: 6px; }
 }
 
 .install-hint .btn-row { margin-top: 4px; }
+
+/* ---- install bar ---------------------------------------------------- */
+
+/* Sits above the exercise list. Bordered rather than quiet, because a PWA that
+   nobody installs is just a website. */
+.install-bar {
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  background: rgba(77, 163, 255, 0.08);
+}
+
+.install-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.install-bar-text { flex: 1; font-size: 0.9rem; }
+
+/* the button must not stretch to full width like .btn normally does */
+.install-bar-btn {
+  width: auto;
+  flex: none;
+  min-height: 40px;
+  padding: 8px 18px;
+}
+
+.install-steps {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.install-steps li { margin-bottom: 4px; }

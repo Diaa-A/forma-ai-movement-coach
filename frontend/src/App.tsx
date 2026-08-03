@@ -184,6 +184,12 @@ export default function App() {
     <main>
       {!online && <OfflineNotice />}
 
+      {/* Above the exercise list on purpose. Installing to the home screen is the
+          whole reason this is a PWA rather than a website, and when it sat at the
+          bottom of this screen it fell below the fold on a phone -- invisible on
+          the one device it exists for. */}
+      {state.screen === 'select' && <InstallPrompt />}
+
       {state.screen === 'select' && (
         <ExerciseSelect
           exercises={state.exercises}
@@ -234,10 +240,6 @@ export default function App() {
           onRestart={() => dispatch({ type: 'restart' })}
         />
       )}
-
-      {/* only offered on the first screen — nobody wants an install nag halfway
-          through waiting for their analysis */}
-      {state.screen === 'select' && <InstallPrompt />}
 
       <Disclaimer />
     </main>
