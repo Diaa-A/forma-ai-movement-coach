@@ -58,6 +58,16 @@ class Movement:
     score_frame: Callable[[dict, str], Tuple[float, dict]]
 
     # --- rep gating, all as multiples of the body scale or degrees of bend ---
+    #
+    # Whether body travel is a usable signal at all. It is for a squat: the hips
+    # ARE the movement, and travel separates a rep from a noise zero-crossing
+    # cleanly. It is not for a push-up. The body pivots at the toes, so the hips
+    # move a fraction of what the arms do, and how much of that fraction reaches
+    # the camera depends on where the camera is. Measured across seven clips, hip
+    # travel for a genuine push-up rep ranged from 0.10 to 0.55 of body length --
+    # a five-fold spread for the same exercise, which no pair of thresholds can
+    # straddle. The joint that flexes is the honest test there.
+    use_travel_gate: bool = True
     max_travel: float = 1.0        # above this the tracking has come apart
     travel_abs_floor: float = 0.10
     travel_rel_floor: float = 0.35
@@ -191,6 +201,16 @@ def keep_real_reps(movement: Movement, reps, travel_y, scale,
     travel test existed for: a set of uniformly shallow reps still counts, and is
     then flagged as shallow rather than silently dropped.
     """
+    if not reps:
+        return []
+
+    if not movement.use_travel_gate:
+        # Travel says nothing useful for this movement, so let the flexion gate
+        # decide on its own. It is the stronger test anyway: it asks whether the
+        # joint under assessment actually moved, rather than whether the body did.
+        return _keep_reps_that_flexed(movement, list(reps), angles_per_frame,
+                                      side, fps)
+
     travels = []
     for (s, b, e) in reps:
         window = travel_y[s:e + 1]

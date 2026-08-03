@@ -190,9 +190,7 @@ PUSHUP = Movement(
     scale_metric="euclidean",
     is_valid=frame_valid,
     score_frame=_score_frame,
-    max_travel=MAX_PLAUSIBLE_HIP_TRAVEL,
-    travel_abs_floor=TRAVEL_ABS_FLOOR,
-    travel_rel_floor=TRAVEL_REL_FLOOR,
+    use_travel_gate=False,
     min_flexion=MIN_REP_ELBOW_FLEXION,
     flexion_rel_floor=MIN_REP_FLEXION_RATIO,
 )

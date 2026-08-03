@@ -228,3 +228,50 @@ def test_caption_names_pushup_joints_not_squat_ones():
     joined = " ".join(lines)
     assert "elbow" in joined and "body" in joined
     assert "knee" not in joined and "shin" not in joined
+
+
+# ---------------------------------------------------------------------------
+# Rep gating: why push-up does not use body travel
+# ---------------------------------------------------------------------------
+
+def test_pushup_ignores_body_travel_when_deciding_reps():
+    """From a real upload: fourteen push-ups each moved the hips about 0.10 of
+    body length, while lowering into position at the start moved them 0.59. Under
+    a travel gate that 0.59 became the largest travel in the clip and the relative
+    floor exceeded every genuine rep -- one survived out of fourteen.
+
+    Retuning could not fix it: measured across seven clips, hip travel for a real
+    push-up rep ranged 0.10 to 0.55 of body length, because the body pivots at the
+    toes and how much of that reaches the camera depends on the camera. The joint
+    that flexes is the reliable signal.
+    """
+    assert pushup.PUSHUP.use_travel_gate is False
+    assert squat.SQUAT.use_travel_gate is True, "the squat's hips ARE the movement"
+
+    # travel that would fail every squat floor; the reps must survive anyway
+    angles = (_set_of_reps(4, elbow=95.0, body=4.0)[0])
+    reps = [(i * 60, i * 60 + 30, i * 60 + 59) for i in range(4)]
+    flat = np.zeros(240)          # no body travel at all
+
+    kept = mechanics.keep_real_reps(pushup.PUSHUP, reps, flat, scale=0.5,
+                                    angles_per_frame=angles, side="left", fps=30.0)
+    assert len(kept) == 4
+
+
+def test_pushup_still_rejects_a_dip_where_the_elbow_did_not_bend():
+    """Dropping the travel gate must not mean accepting anything. Getting into
+    position is rejected because the elbow stays near straight, which is what
+    caught it on the real clip -- flexion 15 degrees against 66-88 for the reps."""
+    def dip(n, at, elbow):
+        return [_frame(elbow=elbow if i == at else 172.0, body=4.0) for i in range(n)]
+
+    angles = (dip(60, 30, 165.0)      # settling into position: elbow barely bends
+              + dip(60, 30, 95.0)
+              + dip(60, 30, 92.0))
+    reps = [(0, 30, 59), (60, 90, 119), (120, 150, 179)]
+    flat = np.zeros(180)
+
+    kept = mechanics.keep_real_reps(pushup.PUSHUP, reps, flat, scale=0.5,
+                                    angles_per_frame=angles, side="left", fps=30.0)
+    assert (0, 30, 59) not in kept
+    assert len(kept) == 2
