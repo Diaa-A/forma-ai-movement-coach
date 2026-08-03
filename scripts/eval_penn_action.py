@@ -115,6 +115,23 @@ def save_sanity_overlay(seq, pose, idxs, out_path):
     return out_path
 
 
+def _num(value, spec=".1f", missing="n/a"):
+    """Format a metric that may legitimately be absent.
+
+    A sequence where MediaPipe detected nothing has no MPJPE — not zero, not an
+    error, simply nothing to average. Every squat sequence produced detections so
+    this never came up; the first push-up run hit it immediately and took the
+    whole evaluation down at the print statement, after all the expensive work.
+    Absent is a real outcome here and the harness has to be able to say so.
+    """
+    if value is None:
+        return missing
+    try:
+        return format(value, spec)
+    except (TypeError, ValueError):
+        return missing
+
+
 def _default_output(action):
     return Path("data/outputs/penn_eval" if action == "squat"
                 else f"data/outputs/penn_eval_{action}")
@@ -247,12 +264,20 @@ def main():
         for n, lst in acc_sw.joint_errors.items():
             overall_swapped.joint_errors[n].extend(lst)
 
-        print(f"    {sid}: MPJPE={s['mpjpe_2d_pixels']:.1f}px  "
-              f"PCK@0.2={s['pck@0.2']:.2f}  "
-              f"detect={s['detection_rate']:.2f}  frames={s['frames_evaluated']}")
+        print(f"    {sid}: MPJPE={_num(s['mpjpe_2d_pixels'])}px  "
+              f"PCK@0.2={_num(s['pck@0.2'], '.2f')}  "
+              f"detect={_num(s['detection_rate'], '.2f')}  "
+              f"frames={s['frames_evaluated']}")
 
         if args.sanity:
             save_sanity_overlay(seq, pose, idxs, out_dir / f"sanity_{sid}.jpg")
+
+    dead = [sid for sid, s in per_seq.items() if s["frames_detected"] == 0]
+    if dead:
+        print(f"\n[!] {len(dead)} sequence(s) produced no detections at all: "
+              f"{', '.join(dead)}")
+        print("    These still count against the detection rate, which is the "
+              "honest treatment -- they are clips the system could not use.")
 
     summary = overall.summary()
 
@@ -287,13 +312,14 @@ def main():
     print("\n=== aggregate ===")
     print(f"  sequences:        {len(seq_ids)}")
     print(f"  frames evaluated: {summary['frames_evaluated']}")
-    print(f"  detection rate:   {summary['detection_rate']:.1%}")
-    print(f"  MPJPE (2D):       {summary['mpjpe_2d_pixels']:.1f} px "
-          f"(median {summary['mpjpe_2d_median']:.1f})")
-    print(f"  PCK@0.2:          {summary['pck@0.2']:.3f}")
+    print(f"  detection rate:   {_num(summary['detection_rate'], '.1%')}")
+    print(f"  MPJPE (2D):       {_num(summary['mpjpe_2d_pixels'])} px "
+          f"(median {_num(summary['mpjpe_2d_median'])})")
+    print(f"  PCK@0.2:          {_num(summary['pck@0.2'], '.3f')}")
     print("  angle error (deg):")
     for k, v in summary["angle_error_degrees"].items():
-        print(f"     {k:12s} mean={v['mean']:.1f}  median={v['median']:.1f}  n={v['n']}")
+        print(f"     {k:12s} mean={_num(v['mean'])}  "
+              f"median={_num(v['median'])}  n={v['n']}")
     if "WARNING" in summary:
         print(f"  [!] {summary['WARNING']}")
     print(f"\noutputs: {out_dir}")
