@@ -40,6 +40,7 @@ SQUAT_CUES: Dict[str, dict] = {
         "fix": "Aim to reach hip-crease level with the knee at the bottom. If your range is limited, work on ankle and hip mobility separately rather than forcing depth.",
         "joints": ["knee"],
         "phase": "bottom",
+        "plane": SAGITTAL,
         "available": True,
     },
     "excessive_forward_lean": {
@@ -48,6 +49,7 @@ SQUAT_CUES: Dict[str, dict] = {
         "fix": "Drive your chest up as you descend so the torso stays roughly parallel to your shins. Think 'proud chest' — the sternum should point forward, not at the floor.",
         "joints": ["left_shoulder", "right_shoulder", "left_hip", "right_hip"],
         "phase": "bottom",
+        "plane": SAGITTAL,
         "available": True,
     },
     "hip_rise_first": {
@@ -56,6 +58,7 @@ SQUAT_CUES: Dict[str, dict] = {
         "fix": "Drive the chest up and the hips up together. Cue: imagine pushing the floor away with your feet rather than lifting your hips.",
         "joints": ["left_shoulder", "right_shoulder", "left_hip", "right_hip"],
         "phase": "ascent",
+        "plane": SAGITTAL,
         "available": True,
     },
     "knee_left_right_asymmetry": {
@@ -64,6 +67,7 @@ SQUAT_CUES: Dict[str, dict] = {
         "fix": "Film yourself from the front to check whether one hip is dropping. Even out by emphasising the weak side.",
         "joints": ["left_knee", "right_knee"],
         "phase": "bottom",
+        "plane": FRONTAL,
         "available": True,
     },
     "rep_inconsistency": {
@@ -72,6 +76,7 @@ SQUAT_CUES: Dict[str, dict] = {
         "fix": "Use a consistent depth target. If you can't hit the same depth every rep, you may be fatiguing — reduce the load or rep count.",
         "joints": [],
         "phase": None,
+        "plane": SAGITTAL,
         "available": True,
     },
     "fast_descent": {
@@ -80,6 +85,7 @@ SQUAT_CUES: Dict[str, dict] = {
         "fix": "Lower yourself in 2-3 seconds under control. Pause briefly at the bottom before driving up.",
         "joints": [],
         "phase": "descent",
+        "plane": SAGITTAL,
         "available": True,
     },
 
@@ -90,6 +96,7 @@ SQUAT_CUES: Dict[str, dict] = {
         "fix": "Push the knees outward in line with the toes throughout the movement. Cue: 'spread the floor'.",
         "joints": ["left_knee", "right_knee"],
         "phase": "descent",
+        "plane": FRONTAL,
         "available": False,   # needs front-on camera or 3D — parked
     },
     "heel_lift": {
@@ -98,6 +105,7 @@ SQUAT_CUES: Dict[str, dict] = {
         "fix": "Work on calf and ankle mobility, or try squatting with 5-10mm heel elevation (a thin plate under each heel).",
         "joints": ["left_heel", "right_heel"],
         "phase": "bottom",
+        "plane": SAGITTAL,
         "available": False,   # needs ground-plane reference, parked
     },
 }
@@ -113,10 +121,21 @@ SQUAT_PROFILE = ExerciseProfile(
     filming_guide=("Film side-on at about hip height with your whole body in "
                    "frame. For a left/right symmetry check, film a second set "
                    "from the front."),
+    # Audited against the cue set on 4 Aug 2026 and found short in three places:
+    # hip_rise_first fires but was declared nowhere, and both parked detectors
+    # (knee_valgus, heel_lift) were invisible -- so a user asking "do my knees
+    # cave in?" got silence with no way to tell whether that meant "no" or "not
+    # assessed". Same fourth-state failure as the push-up's elbow flare. Every cue
+    # in SQUAT_CUES now appears here, parked or not.
     plane_assessments={
-        SAGITTAL: ["squat depth", "forward lean", "descent tempo", "rep consistency"],
+        SAGITTAL: ["squat depth", "forward lean", "descent tempo", "rep consistency",
+                   "hip drive out of the bottom"],
         FRONTAL:  ["left/right symmetry"],
     },
+    # Cues that exist but are parked (available: False). Declared so the silence
+    # is legible, kept out of the covered lists so no view claims to assess them.
+    not_yet_assessed=["knee tracking (whether the knees cave inward)",
+                      "whether the heels stay down"],
 )
 
 # Which anatomical plane each cue lives in — a cue is only meaningful from a view

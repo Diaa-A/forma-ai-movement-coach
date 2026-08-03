@@ -31,6 +31,13 @@ class ExerciseProfile:
     # for the ones that are a single lowercase word; it exists for the ones that
     # aren't ("pushup" should read "Push-up", not "Pushup").
     display_name: Optional[str] = None
+    # Declared, but no working detector behind it yet -- a cue carrying
+    # `available: False`, like the squat's knee valgus or the push-up's elbow
+    # flare. These must NOT appear in plane_assessments: saying a view "covers"
+    # something the system never actually reports on is a different lie from
+    # staying silent about it, and arguably a worse one, because the user reads
+    # coverage as a clean bill of health. They get named separately instead.
+    not_yet_assessed: List[str] = field(default_factory=list)
 
     def assessments(self, plane: str) -> List[str]:
         return self.plane_assessments.get(plane, [])
@@ -56,14 +63,20 @@ def coverage_guidance(profile: ExerciseProfile, frontal_observed: bool) -> Optio
     so both planes are covered). Otherwise it names the frontal-plane assessments
     that this side-on clip cannot reach and tells the user to film a front view —
     turning a silent gap into a clear instruction."""
-    if frontal_observed:
-        return None
+    parts = []
+
     frontal_items = profile.assessments(FRONTAL)
-    if not frontal_items:
-        return None
-    sagittal_items = profile.assessments(SAGITTAL)
-    covered = _join(sagittal_items)
-    missing = _join(frontal_items)
-    lead = f"This clip is {profile.view_label}, which covers {covered}. " if covered \
-        else f"This clip is {profile.view_label}. "
-    return lead + f"To check {missing}, film a set from the front."
+    if not frontal_observed and frontal_items:
+        covered = _join(profile.assessments(SAGITTAL))
+        lead = f"This clip is {profile.view_label}, which covers {covered}. " if covered \
+            else f"This clip is {profile.view_label}. "
+        parts.append(lead + f"To check {_join(frontal_items)}, film a set from the front.")
+
+    # Named whichever way the clip was filmed, because a detector that does not
+    # work yet is not fixed by changing the camera angle. Saying so is what keeps
+    # "nothing was reported" from reading as "nothing was wrong".
+    if profile.not_yet_assessed:
+        parts.append(f"Not assessed yet by this system: "
+                     f"{_join(profile.not_yet_assessed)}.")
+
+    return " ".join(parts) if parts else None

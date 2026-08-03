@@ -158,8 +158,10 @@ PUSHUP_PROFILE = ExerciseProfile(
         # lateral, so a side-on clip cannot see it at all -- listing it here is
         # what turns "the app ignored my question about my arms" into "film from
         # the front and it will answer it".
-        FRONTAL: ["left/right arm symmetry", "elbow flare (how wide the arms travel)"],
+        FRONTAL: ["left/right arm symmetry"],
     },
+    not_yet_assessed=["elbow flare (how wide the arms travel from the body)",
+                      "head and neck position"],
 )
 
 

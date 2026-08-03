@@ -1,7 +1,7 @@
 """Layer 1 cue evaluator: thresholds, visibility gating, view guidance."""
 import numpy as np
 
-from backend.exercises.squat_cues import evaluate_squat
+from backend.exercises.squat_cues import evaluate_squat, SQUAT_CUES, SQUAT_PROFILE
 from backend.pipeline.pose import LM
 
 FPS = 30.0
@@ -64,7 +64,11 @@ def test_asymmetry_fires_when_far_leg_is_visible():
     ev = evaluate_squat(_clip(knee_l=90.0, knee_r=130.0), REPS, "left", FPS,
                         landmarks=_landmarks(far_leg_vis=0.95))
     assert "knee_left_right_asymmetry" in _flags(ev)
-    assert ev.view_guidance is None    # frontal plane was observable
+    # The frontal plane was observable, so there must be no "film from the front"
+    # instruction. There may still be guidance: detectors that are parked stay
+    # unassessed whichever way the clip was filmed, and the system now says so
+    # rather than letting that silence read as a clean result.
+    assert "film a set from the front" not in (ev.view_guidance or "")
 
 
 def test_asymmetry_suppressed_when_far_leg_is_occluded():
@@ -106,3 +110,51 @@ def test_no_reps_yields_nothing():
     assert ev.rep_count == 0
     assert ev.cues_fired == []
     assert ev.view_guidance is None
+
+
+# ---------------------------------------------------------------------------
+# Coverage as a contract (handoff section 15)
+# ---------------------------------------------------------------------------
+
+def test_every_cue_is_declared_somewhere_in_the_profile():
+    """A cue that appears in no plane list and no not-yet-assessed list is
+    invisible: it never fires, nothing tells the user it was not checked, and the
+    report reads as though it was checked and found fine.
+
+    That is exactly what happened with the push-up's elbow flare -- a user asked
+    about their arms and got silence, because flare was declared nowhere. This
+    asserts the squat cannot drift into the same state.
+    """
+    from backend.exercises.base import SAGITTAL, FRONTAL
+    declared = set(SQUAT_PROFILE.assessments(SAGITTAL)) \
+        | set(SQUAT_PROFILE.assessments(FRONTAL)) \
+        | set(SQUAT_PROFILE.not_yet_assessed)
+    # matched loosely on keywords, since the declared strings are user-facing
+    # prose rather than cue keys
+    expected = {
+        "shallow_depth": "depth",
+        "excessive_forward_lean": "lean",
+        "hip_rise_first": "hip drive",
+        "knee_left_right_asymmetry": "symmetry",
+        "rep_inconsistency": "consistency",
+        "fast_descent": "tempo",
+        "knee_valgus": "knee tracking",
+        "heel_lift": "heel",
+    }
+    assert set(expected) == set(SQUAT_CUES), "a cue was added without declaring it"
+    blob = " ".join(declared).lower()
+    for flag, keyword in expected.items():
+        assert keyword in blob, f"{flag} is not declared in the profile"
+
+
+def test_parked_cues_are_not_claimed_as_covered():
+    """A view must not say it 'covers' something no working detector reports on.
+    Claiming coverage is a different lie from staying silent, and a worse one --
+    the user reads it as a clean bill of health."""
+    from backend.exercises.base import SAGITTAL, FRONTAL
+    covered = " ".join(SQUAT_PROFILE.assessments(SAGITTAL)
+                       + SQUAT_PROFILE.assessments(FRONTAL)).lower()
+    for flag, cue in SQUAT_CUES.items():
+        if not cue.get("available", False):
+            keyword = {"knee_valgus": "knee tracking", "heel_lift": "heel"}[flag]
+            assert keyword not in covered, f"{flag} is parked but claimed as covered"
