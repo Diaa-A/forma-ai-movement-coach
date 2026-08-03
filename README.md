@@ -169,7 +169,7 @@ Groq-hosted `whisper-large-v3` (Decision 22). This is the offline fallback only.
 
 ```
 .
-├── BUILD_REFERENCE.md         build reference (read first)
+├── BUILD_REFERENCE.md                  build reference (read first)
 ├── README.md                  this file
 ├── analyze_squat.py           CLI entry
 ├── .env.example
