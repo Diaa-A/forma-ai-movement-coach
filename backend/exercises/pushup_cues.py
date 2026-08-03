@@ -94,6 +94,30 @@ PUSHUP_CUES = {
         "plane": FRONTAL,
         "available": True,
     },
+    "elbow_flare": {
+        "severity": "primary",
+        "fault": ("your upper arms travelled out wide from your body, closer to a "
+                  "T shape than an arrow, which loads the front of the shoulder."),
+        "fix": ("tuck the elbows to roughly 45 degrees from your sides, so the "
+                "arms form an arrow rather than a T. Point your fingers forward "
+                "and screw your hands into the floor to help hold it."),
+        "joints": ["left_elbow", "right_elbow", "left_shoulder", "right_shoulder"],
+        "phase": "bottom",
+        "plane": FRONTAL,
+        # Declared but PARKED, and the distinction matters. Flare is lateral
+        # abduction: filmed side-on the arm moves almost perpendicular to the
+        # camera, so a flared arm and a tucked one both project to nearly the same
+        # shoulder angle -- measured at 0-11 degrees across every rep of a real
+        # side-on clip, whether or not the arms were flared. It is genuinely
+        # unmeasurable from that view.
+        #
+        # It is listed anyway because declaring it is what lets the system tell a
+        # user that their question needs a front-on clip, instead of silently
+        # saying nothing about arms. The cue stays unavailable until there is
+        # front-on footage to calibrate a threshold against; shipping a guessed
+        # number would be the thing this project keeps refusing to do.
+        "available": False,
+    },
     "head_dropped": {
         "severity": "secondary",
         "fault": "your head dropped toward the floor instead of staying in line with the spine.",
@@ -130,7 +154,11 @@ PUSHUP_PROFILE = ExerciseProfile(
                    "second set from in front of your head."),
     plane_assessments={
         SAGITTAL: ["push-up depth", "hip position", "descent tempo", "rep consistency"],
-        FRONTAL: ["left/right arm symmetry"],
+        # Both of these need the camera in front of the head. Elbow flare is
+        # lateral, so a side-on clip cannot see it at all -- listing it here is
+        # what turns "the app ignored my question about my arms" into "film from
+        # the front and it will answer it".
+        FRONTAL: ["left/right arm symmetry", "elbow flare (how wide the arms travel)"],
     },
 )
 
