@@ -1,6 +1,6 @@
 """CLI squat analyser (Phases A + B + C + D).
 
-Thin wrapper over `backend.pipeline.runner.run_squat_pipeline`. The same
+Thin wrapper over `backend.pipeline.runner.run_pipeline`. The same
 function is reused by the FastAPI server in `backend.main`, so the CLI and
 the API can't drift.
 """
@@ -10,7 +10,8 @@ import os
 import sys
 from pathlib import Path
 
-from backend.pipeline.runner import run_squat_pipeline, RunOptions
+from backend.pipeline.runner import run_pipeline, RunOptions
+from backend.exercises.registry import exercise_ids
 from backend.pipeline.coaching import (
     generate_coaching_report, format_report, DEFAULT_MODEL as DEFAULT_LLM_MODEL,
     CoachingReport,
@@ -31,8 +32,12 @@ def _load_dotenv(path=".env"):
 
 
 def _parse_args():
-    p = argparse.ArgumentParser(description="Analyse a squat clip.")
+    p = argparse.ArgumentParser(description="Analyse an exercise clip.")
     p.add_argument("--input",  required=True, help="path to the input video")
+    # choices come from the registry, so a newly registered exercise is usable
+    # from the CLI without touching this file
+    p.add_argument("--exercise", default="squat", choices=exercise_ids(),
+                   help="which exercise the clip shows (default: squat)")
     p.add_argument("--output", default="data/outputs",
                    help="directory under which a job folder is created")
     p.add_argument("--model", default="full", choices=["lite", "full", "heavy"],
@@ -72,7 +77,7 @@ def main():
 
     print(f"[+] analysing: {Path(args.input).name}  (pose model: {args.model})")
     try:
-        result = run_squat_pipeline(args.input, args.output, options=opts)
+        result = run_pipeline(args.input, args.output, args.exercise, options=opts)
     except FileNotFoundError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2

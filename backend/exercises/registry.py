@@ -1,36 +1,82 @@
-"""One place that knows which exercises exist.
+"""One place that knows which exercises exist and how to run each one.
 
 `routes.py` used to carry its own `ALLOWED_EXERCISES = {"squat"}` literal, which
 is fine right up until someone adds an exercise and updates one of the two lists.
-Everything now derives from `PROFILES` below, so the API's allowlist and the
-frontend's exercise picker cannot disagree with each other — adding push-up means
-registering a profile here and nothing else.
+Everything now derives from `EXERCISES` below.
 
-The frontend reads this through `GET /exercises` rather than hard-coding the
-filming guidance, which matters because that text also feeds the coaching output.
-Two copies of it would drift the first time a threshold moved.
+Adding an exercise means writing its three modules and adding one entry here. The
+pipeline, the API allowlist, the frontend picker and the filming guidance all
+follow from that — none of them needs editing, and none of them contains a name
+of an exercise.
 """
-from typing import Dict, List, Optional
+from dataclasses import dataclass
+from typing import Callable, Dict, List, Optional
 
+from ..pipeline.angles import pushup_angles_per_frame, squat_angles_per_frame
 from .base import ExerciseProfile
-from .squat_cues import SQUAT_PROFILE
+from .mechanics import Movement
+from . import pushup, squat
+from .pushup_cues import PUSHUP_PROFILE, evaluate_pushup
+from .squat_cues import SQUAT_PROFILE, evaluate_squat
 
 
-# id -> profile. The id is what the client sends as `exercise_type`, so keep it
-# lowercase and url-safe.
-PROFILES: Dict[str, ExerciseProfile] = {
-    "squat": SQUAT_PROFILE,
+@dataclass(frozen=True)
+class ExerciseSpec:
+    """Everything the pipeline needs to analyse one exercise.
+
+    The runner reads this and nothing else, which is what keeps exercise names out
+    of `pipeline/`. That was WP-04's acceptance criterion and it is the part worth
+    checking: if a name had leaked, this indirection would be pointless.
+    """
+    profile: ExerciseProfile
+    movement: Movement
+    angles: Callable          # landmarks -> list of per-frame angle dicts
+    evaluate: Callable        # Layer 1 cue evaluation
+    flag_frames: Callable     # per-frame joints to draw in fault colour
+    caption: Callable         # angle dict + side -> overlay readout lines
+    # symmetric landmark pair whose mean vertical position drives phase detection.
+    # Both current exercises use the hips, which is a finding rather than a
+    # coincidence -- see the note in the work-package documentation.
+    travel_landmarks: tuple = ("left_hip", "right_hip")
+
+
+EXERCISES: Dict[str, ExerciseSpec] = {
+    "squat": ExerciseSpec(
+        profile=SQUAT_PROFILE,
+        movement=squat.SQUAT,
+        angles=squat_angles_per_frame,
+        evaluate=evaluate_squat,
+        flag_frames=squat.flag_frames,
+        caption=squat.frame_caption,
+    ),
+    "pushup": ExerciseSpec(
+        profile=PUSHUP_PROFILE,
+        movement=pushup.PUSHUP,
+        angles=pushup_angles_per_frame,
+        evaluate=evaluate_pushup,
+        flag_frames=pushup.flag_frames,
+        caption=pushup.frame_caption,
+    ),
 }
+
+
+# kept for the API and the /exercises endpoint, which only want the profiles
+PROFILES: Dict[str, ExerciseProfile] = {k: v.profile for k, v in EXERCISES.items()}
 
 
 def exercise_ids() -> List[str]:
     """Sorted so the picker order is stable rather than dict-insertion order."""
-    return sorted(PROFILES)
+    return sorted(EXERCISES)
+
+
+def get_spec(exercise_id: str) -> Optional[ExerciseSpec]:
+    return EXERCISES.get(exercise_id)
 
 
 def get_profile(exercise_id: str) -> Optional[ExerciseProfile]:
-    return PROFILES.get(exercise_id)
+    spec = EXERCISES.get(exercise_id)
+    return spec.profile if spec else None
 
 
 def is_supported(exercise_id: str) -> bool:
-    return exercise_id in PROFILES
+    return exercise_id in EXERCISES

@@ -13,6 +13,8 @@ coaching cues). For now this gives Phase B usable worst/best frame selection.
 """
 import numpy as np
 from ..pipeline.pose import LM, VISIBILITY_THRESHOLD
+from . import mechanics
+from .mechanics import Movement
 
 
 # --- biomechanical standards---------------------------------------------------
@@ -96,127 +98,8 @@ def frame_valid(angle_dict, side):
     return True
 
 
-def pick_side(landmarks, reps):
-    """Decide whether to evaluate the left or right side based on mean visibility
-    of the lower-body landmarks across the analysed reps. Returns 'left' or 'right'."""
-    if not reps:
-        # fall back to whole-video mean
-        spans = [(0, landmarks.shape[0])]
-    else:
-        spans = [(s, e) for (s, _, e) in reps]
-
-    def vis_of(joint_names, span):
-        s, e = span
-        idxs = [LM[n] for n in joint_names]
-        sub = landmarks[s:e, idxs, 3]   # visibility channel
-        return float(np.nanmean(sub)) if sub.size else 0.0
-
-    left_score = np.mean([vis_of(["left_hip", "left_knee", "left_ankle"], sp) for sp in spans])
-    right_score = np.mean([vis_of(["right_hip", "right_knee", "right_ankle"], sp) for sp in spans])
-    return "left" if left_score >= right_score else "right"
-
-
 def _knee_key(side):
     return "knee_left" if side == "left" else "knee_right"
-
-
-def body_scale(landmarks):
-    """Body-size reference in normalised units: median standing hip->ankle length
-    (the more-visible leg). Squat depth scales with leg length, so hip travel is
-    judged relative to this — making the rep test invariant to how large the
-    person appears in frame (camera distance, zoom, resolution)."""
-    def leg_len(hip_name, ank_name):
-        d = np.abs(landmarks[:, LM[ank_name], 1] - landmarks[:, LM[hip_name], 1])
-        d = d[np.isfinite(d)]
-        return float(np.median(d)) if d.size else 0.0
-    return max(leg_len("left_hip", "left_ankle"),
-              leg_len("right_hip", "right_ankle"))
-
-
-def keep_real_reps(reps, hip_y, scale, abs_floor=0.10, rel_floor=0.35,
-                   max_travel=MAX_PLAUSIBLE_HIP_TRAVEL,
-                   angles_per_frame=None, side="left", fps=30.0):
-    """Decide which detected bottoms are genuine reps by HIP TRAVEL, not knee
-    angle. Three checks:
-      - ceiling: travel <= max_travel * leg length — anything above that is not a
-        squat, it is the tracking coming apart (see below).
-      - absolute: travel >= abs_floor * leg length — rejects clips that are all
-        jitter (no real movement at all).
-      - relative: travel >= rel_floor * the largest PLAUSIBLE travel in THIS clip
-        — self-calibrates per clip, so real reps survive and noise zero-crossings
-        drop out without any per-upload tuning.
-    Keeping the travel test (rather than a knee-angle cutoff) means genuinely
-    SHALLOW squats survive and can fire the shallow-depth cue, instead of being
-    silently discarded as 'not a rep'.
-
-    The ceiling has to be applied BEFORE the relative floor calibrates, and that
-    ordering is the whole point of it. On a real upload the subject walked back
-    toward the camera at the end of the clip; the hips travelled 2.9x leg length
-    in that segment, which is not a movement a human makes. That one glitch
-    became `biggest`, every genuine rep measured about 0.15 against it, and all
-    six real reps were binned as noise while the artefact was kept and reported
-    as the only rep. Self-calibration is only safe once obvious nonsense is out
-    of the sample it calibrates against."""
-    travels = []
-    for (s, b, e) in reps:
-        w = hip_y[s:e + 1]
-        w = w[np.isfinite(w)]
-        travels.append(float(w.max() - w.min()) if w.size else 0.0)
-    if not travels:
-        return []
-
-    def implausible(t):
-        return scale > 0 and (t / scale) > max_travel
-
-    plausible = [t for t in travels if not implausible(t)]
-    # if everything looks impossible the clip is a mess anyway — fall back to the
-    # old behaviour rather than dividing by nothing, and let the abs_floor and
-    # the detection-rate status machinery have the final word
-    biggest = max(plausible) if plausible else max(travels)
-
-    passed_travel = []
-    for (s, b, e), t in zip(reps, travels):
-        if implausible(t):
-            continue
-        norm = t / scale   if scale   > 0 else 0.0
-        rel  = t / biggest if biggest > 0 else 0.0
-        if norm >= abs_floor and rel >= rel_floor:
-            passed_travel.append((s, b, e))
-
-    return _keep_reps_that_bent(passed_travel, angles_per_frame, side, fps)
-
-
-def _keep_reps_that_bent(reps, angles_per_frame, side, fps):
-    """Drop dips where the knee never really bent.
-
-    Hip travel says something moved, not what. On a real upload the subject
-    settled into position before starting: the hips dropped enough to clear the
-    travel floor while the knee only reached 137.8 degrees — standing, not
-    squatting. It counted as a rep, scored least-bad among the set, and so became
-    the 'worst form' key frame. The headline image was a photo of someone standing
-    still before their first rep.
-
-    Judged the same way hip travel is: an absolute floor to catch no-movement, and
-    a ratio against the deepest bend in this clip to catch a movement that is real
-    but nothing like the others. Skipped when no angles are supplied, so the
-    travel-only behaviour stays available on its own.
-    """
-    if angles_per_frame is None or not reps:
-        return list(reps)
-
-    flexions = []
-    for (s, b, e) in reps:
-        lo, hi = _eval_window(s, b, e, fps)
-        f = deepest_frame(angles_per_frame, lo, hi, side)
-        knee = None if f is None else angles_per_frame[f].get(_knee_key(side))
-        if knee is None or not np.isfinite(knee):
-            flexions.append(0.0)
-        else:
-            flexions.append(max(0.0, 180.0 - float(knee)))
-
-    deepest = max(flexions) if flexions else 0.0
-    floor = max(MIN_REP_KNEE_FLEXION, deepest * MIN_REP_FLEXION_RATIO)
-    return [rep for rep, flex in zip(reps, flexions) if flex >= floor]
 
 
 def flag_frames(angles_per_frame, reps, side, depth_window=8):
@@ -275,23 +158,6 @@ def flag_frames(angles_per_frame, reps, side, depth_window=8):
     return out
 
 
-def deepest_frame(angles_per_frame, start, end, side):
-    """Frame of maximum knee flexion (minimum knee angle) within a rep window,
-    considering only VALID frames . The hip-lowest frame (velocity bottom) and the
-    deepest knee bend don't always coincide, so depth is read here — but a naive
-    argmin would grab a single-frame tracking glitch, so glitched frames are
-    excluded via frame_valid(). Returns None if the whole window is unusable."""
-    key = _knee_key(side)
-    best_i, best_k = None, float("inf")
-    for i in range(start, end + 1):
-        if not frame_valid(angles_per_frame[i], side):
-            continue
-        k = angles_per_frame[i][key]
-        if k < best_k:
-            best_k, best_i = k, i
-    return best_i
-
-
 def _shin_key(side):
     return "shin_left" if side == "left" else "shin_right"
 
@@ -321,45 +187,87 @@ def _score_frame(angle_dict, side):
     return total, {"depth": round(depth_pen, 1), "lean": round(lean_pen, 1)}
 
 
-def _eval_window(start, b, end, fps):
-    """Search window for peak flexion: ~0.4s either side of the kinematic bottom,
-    clamped to the rep. The deepest knee bend is physically near the hip's lowest
-    point, so we don't scan the whole rep (which lets the eval frame wander into
-    adjacent movement on long or messy clips)."""
-    hw = max(5, int(round(0.4 * (fps or 30.0))))
-    return max(start, b - hw), min(end, b + hw)
+# ---------------------------------------------------------------------------
+# The squat as the generic machinery sees it
+# ---------------------------------------------------------------------------
+# Everything above is squat knowledge: which angles matter, where the thresholds
+# sit, which joints to colour when a fault fires. Everything below hands that to
+# mechanics.py, which does the rep-finding and scoring without knowing what a
+# squat is.
+
+SQUAT = Movement(
+    name="squat",
+    primary_angle=_knee_key,
+    side_joints=lambda side: [f"{side}_hip", f"{side}_knee", f"{side}_ankle"],
+    # hip to ankle, measured vertically: for a standing body that is leg length,
+    # and squat depth scales with it
+    scale_pairs=[("left_hip", "left_ankle"), ("right_hip", "right_ankle")],
+    scale_metric="vertical",
+    is_valid=frame_valid,
+    score_frame=_score_frame,
+    max_travel=MAX_PLAUSIBLE_HIP_TRAVEL,
+    travel_abs_floor=0.10,
+    travel_rel_floor=0.35,
+    min_flexion=MIN_REP_KNEE_FLEXION,
+    flexion_rel_floor=MIN_REP_FLEXION_RATIO,
+)
+
+
+# Thin pass-throughs so callers and tests keep the names they already use. Worth
+# the four lines: the alternative is churning every call site to prove a
+# refactor, which is how refactors acquire bugs that have nothing to do with the
+# refactor.
+
+def pick_side(landmarks, reps):
+    return mechanics.pick_side(SQUAT, landmarks, reps)
+
+
+def body_scale(landmarks):
+    return mechanics.body_scale(SQUAT, landmarks)
+
+
+def keep_real_reps(reps, hip_y, scale, angles_per_frame=None, side="left", fps=30.0):
+    return mechanics.keep_real_reps(SQUAT, reps, hip_y, scale,
+                                    angles_per_frame=angles_per_frame,
+                                    side=side, fps=fps)
+
+
+def deepest_frame(angles_per_frame, start, end, side):
+    return mechanics.deepest_frame(SQUAT, angles_per_frame, start, end, side)
 
 
 def score_reps(angles_per_frame, reps, side, fps=30.0):
-    """Score each rep at its deepest VALID frame near the bottom. Returns a list
-    of (eval_frame, score, breakdown) in rep order. A rep whose window is entirely
-    glitched yields (None, NaN, ...) and is excluded from worst/best selection
-    rather than scored on garbage."""
-    out = []
-    for (s, b, e) in reps:
-        lo, hi = _eval_window(s, b, e, fps)
-        f = deepest_frame(angles_per_frame, lo, hi, side)
-        if f is None:
-            out.append((None, float("nan"), {"depth": None, "spine": None}))
-        else:
-            score, breakdown = _score_frame(angles_per_frame[f], side)
-            out.append((f, score, breakdown))
-    return out
+    return mechanics.score_reps(SQUAT, angles_per_frame, reps, side, fps)
 
 
 def worst_frame(angles_per_frame, reps, side, fps=30.0):
-    """Eval frame of the worst-scoring rep (highest deviation)."""
-    scored = [(f, s) for (f, s, _) in score_reps(angles_per_frame, reps, side, fps)
-              if np.isfinite(s)]
-    if not scored:
-        return None
-    return max(scored, key=lambda x: x[1])[0]
+    return mechanics.worst_frame(SQUAT, angles_per_frame, reps, side, fps)
 
 
 def best_frame(angles_per_frame, reps, side, fps=30.0):
-    """Eval frame of the best-scoring rep (lowest deviation)."""
-    scored = [(f, s) for (f, s, _) in score_reps(angles_per_frame, reps, side, fps)
-              if np.isfinite(s)]
-    if not scored:
-        return None
-    return min(scored, key=lambda x: x[1])[0]
+    return mechanics.best_frame(SQUAT, angles_per_frame, reps, side, fps)
+
+
+def frame_caption(angle_dict, side):
+    """The measurement readout burned into the overlay and the key frames.
+
+    Lives with the exercise because it names the exercise's joints. The renderer
+    used to build this string itself, which meant a push-up frame was captioned
+    "knee L:-- R:-- shin --" — every field empty, because none of them applied.
+    """
+    trunk = angle_dict.get("spine")
+    shin = angle_dict.get(_shin_key(side))
+    lines = [
+        "knee L:{} R:{}".format(_fmt(angle_dict.get("knee_left")),
+                                _fmt(angle_dict.get("knee_right"))),
+        "trunk {}  shin {}".format(_fmt(trunk), _fmt(shin)),
+    ]
+    if trunk is not None and shin is not None and np.isfinite(trunk) and np.isfinite(shin):
+        lines.append("lean {:+.0f} (cap +{:.0f})".format(trunk - shin, LEAN_EXCESS_LIMIT))
+    return lines
+
+
+def _fmt(v):
+    if v is None or not np.isfinite(v):
+        return "--"
+    return "{:.0f}".format(v)

@@ -130,7 +130,7 @@ def draw_overlay(frame_bgr, landmarks_frame, flagged_joints=None, info_text=None
 
 
 def render_video(input_path, landmarks_all, angles_all, output_path,
-                 flagged_per_frame=None):
+                 flagged_per_frame=None, caption=None, side=None):
     """Re-encode the input video with skeleton overlays per frame.
 
     The encoding itself lives in `encoder.py` — see the docstring there for why
@@ -155,10 +155,9 @@ def render_video(input_path, landmarks_all, angles_all, output_path,
             if not ok or i >= n:
                 break
             ang = angles_all[i]
-            info = "knee L:{} R:{}  spine:{}".format(
-                _fmt(ang.get("knee_left")), _fmt(ang.get("knee_right")),
-                _fmt(ang.get("spine")),
-            )
+            # the caption names joints, so the exercise supplies it -- see
+            # squat.frame_caption / pushup.frame_caption
+            info = "\n".join(caption(ang, side)) if caption else None
             draw_overlay(frame, landmarks_all[i], flagged_per_frame[i], info_text=info)
             writer.write(frame)
             i += 1
@@ -205,32 +204,26 @@ def read_frames_exact(input_path, indices):
 
 def save_key_frame(input_path, frame_idx, landmarks_frame, angle_frame,
                    output_path, flagged_joints=None, label="", side=None,
-                   frame=None):
+                   frame=None, caption=None):
     """Save one frame with overlay + label.
 
     Pass `frame` if you already decoded it (see read_frames_exact) — otherwise
     this reads it, exactly, itself.
 
-    When `side` is given, the trunk-vs-shin relationship (the basis of the forward
-    lean cue) is shown explicitly, so the figure explains why a frame was flagged."""
+    `caption` comes from the exercise and produces the measurement lines, so the
+    figure explains why the frame was flagged in that exercise's own terms."""
     if frame is None:
         got = read_frames_exact(input_path, [frame_idx])
         frame = got.get(frame_idx)
     if frame is None:
         raise RuntimeError(f"could not read frame {frame_idx} from {input_path}")
 
-    trunk = angle_frame.get("spine")
-    shin = angle_frame.get("shin_left" if side == "left" else "shin_right")
     info_lines = [
         label.upper() if label else "",
         "frame {}".format(frame_idx),
-        "knee L:{} R:{}".format(_fmt(angle_frame.get("knee_left")),
-                                _fmt(angle_frame.get("knee_right"))),
-        "trunk {}  shin {}".format(_fmt(trunk), _fmt(shin)),
     ]
-    if (trunk is not None and shin is not None
-            and np.isfinite(trunk) and np.isfinite(shin)):
-        info_lines.append("lean {:+.0f} (cap +15)".format(trunk - shin))
+    if caption is not None:
+        info_lines.extend(caption(angle_frame, side))
     info_text = "\n".join(s for s in info_lines if s)
     draw_overlay(frame, landmarks_frame, flagged_joints, info_text=info_text)
     cv2.imwrite(str(output_path), frame)

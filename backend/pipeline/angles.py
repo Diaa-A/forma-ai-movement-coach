@@ -98,3 +98,104 @@ def squat_angles_per_frame(landmarks):
             "spine":      spine,
         })
     return out
+
+
+def _signed_body_line(shoulder, hip, ankle):
+    """How far the hip sits off the straight shoulder-to-ankle line, and which way.
+
+    A push-up is judged on whether the body holds a plank. The interior angle at
+    the hip alone cannot say what went wrong: sagging and piking both bend it the
+    same amount, and they need opposite corrections. So the perpendicular offset
+    of the hip from the shoulder-ankle line is measured instead, and signed by the
+    cross product.
+
+    Returns degrees of deviation from straight, **positive when the hips are LOW
+    (sagging) and negative when they are HIGH (piked)**. Sag is the far more
+    common fault, so it gets the positive direction. Expressed as an angle rather
+    than a distance so it does not change meaning with camera distance.
+
+    Image coordinates have y increasing downward, which is easy to get backwards
+    here — the direction is pinned by a test rather than by reading the sign off
+    the cross product and hoping.
+    """
+    s = np.asarray(shoulder, dtype=np.float64)
+    h = np.asarray(hip, dtype=np.float64)
+    a = np.asarray(ankle, dtype=np.float64)
+    if not (np.all(np.isfinite(s)) and np.all(np.isfinite(h)) and np.all(np.isfinite(a))):
+        return float("nan")
+
+    interior = joint_angle(s, h, a)
+    if not np.isfinite(interior):
+        return float("nan")
+    deviation = 180.0 - interior          # 0 when perfectly straight
+
+    # cross product of shoulder->ankle with shoulder->hip. y points down, so a
+    # negative z means the hip lies above the line: piked.
+    line = a - s
+    to_hip = h - s
+    cross = line[0] * to_hip[1] - line[1] * to_hip[0]
+    if not np.isfinite(cross) or cross == 0:
+        return deviation
+    return -deviation if cross < 0 else deviation
+
+
+def pushup_angles_per_frame(landmarks):
+    """Per-frame push-up angle dict.
+
+    Same shape and conventions as `squat_angles_per_frame`, and built from the
+    same primitives — only the joints of interest differ. Keys:
+
+        elbow_left / elbow_right   shoulder-elbow-wrist, the angle that flexes
+        body_left / body_right     signed hip deviation from the shoulder-ankle
+                                   line: positive sagging, negative piked
+        shoulder_left / shoulder_right
+                                   elbow-shoulder-hip, how far the upper arm is
+                                   from the torso (flared elbows read wide)
+        neck                       head deviation from the shoulder-hip line,
+                                   for the dropped- or craned-head cue
+        spine                      trunk angle from vertical, carried over so the
+                                   shared validity gate has something to check
+    """
+    out = []
+    for f in range(len(landmarks)):
+        fr = landmarks[f]
+
+        elbow_l = joint_angle(_xy(fr, LM["left_shoulder"]),  _xy(fr, LM["left_elbow"]),  _xy(fr, LM["left_wrist"]))
+        elbow_r = joint_angle(_xy(fr, LM["right_shoulder"]), _xy(fr, LM["right_elbow"]), _xy(fr, LM["right_wrist"]))
+
+        body_l = _signed_body_line(_xy(fr, LM["left_shoulder"]),  _xy(fr, LM["left_hip"]),  _xy(fr, LM["left_ankle"]))
+        body_r = _signed_body_line(_xy(fr, LM["right_shoulder"]), _xy(fr, LM["right_hip"]), _xy(fr, LM["right_ankle"]))
+
+        sh_l = joint_angle(_xy(fr, LM["left_elbow"]),  _xy(fr, LM["left_shoulder"]),  _xy(fr, LM["left_hip"]))
+        sh_r = joint_angle(_xy(fr, LM["right_elbow"]), _xy(fr, LM["right_shoulder"]), _xy(fr, LM["right_hip"]))
+
+        # neck: nose-shoulder-hip. The ear would be the textbook landmark for head
+        # carriage, but this project's LM map is a curated subset that stops at the
+        # nose, and adding two landmarks to a shared module for one cue is not a
+        # trade worth making. The nose sits further forward than the ear so the
+        # absolute value differs; the cue is calibrated on what this measures, not
+        # on a number borrowed from elsewhere.
+        ls = np.array(_xy(fr, LM["left_shoulder"]))
+        rs = np.array(_xy(fr, LM["right_shoulder"]))
+        lh = np.array(_xy(fr, LM["left_hip"]))
+        rh = np.array(_xy(fr, LM["right_hip"]))
+        mid_sh = (ls + rs) / 2.0
+        mid_hp = (lh + rh) / 2.0
+        neck = joint_angle(_xy(fr, LM["nose"]), mid_sh, mid_hp)
+
+        spine_vec = mid_sh - mid_hp
+        if np.linalg.norm(spine_vec) == 0 or not np.all(np.isfinite(spine_vec)):
+            spine = float("nan")
+        else:
+            up = np.array([0.0, -1.0])
+            cosine = float(np.clip(np.dot(spine_vec, up) / np.linalg.norm(spine_vec), -1.0, 1.0))
+            spine = float(np.degrees(np.arccos(cosine)))
+
+        out.append({
+            "elbow_left":    elbow_l, "elbow_right":    elbow_r,
+            "body_left":     body_l,  "body_right":     body_r,
+            "shoulder_left": sh_l,    "shoulder_right": sh_r,
+            "neck":          neck,
+            "spine":         spine,
+        })
+    return out

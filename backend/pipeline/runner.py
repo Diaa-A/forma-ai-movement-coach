@@ -1,8 +1,13 @@
-"""Pipeline orchestration shared by the CLI (analyze_squat.py) and the API.
+"""Pipeline orchestration shared by the CLI and the API, for every exercise.
 
-Single source of truth for the squat analysis flow so the API doesn't drift
-from the CLI. Both call `run_squat_pipeline()` with the same arguments and get
-back the same artefacts.
+Single source of truth for the analysis flow so the API cannot drift from the
+CLI. Both call `run_pipeline()` and get back the same artefacts.
+
+Nothing here knows what a squat or a push-up is. Which angles to compute, how to
+decide a rep happened, which cues to fire and which joints to colour all arrive
+through the registry entry for the requested exercise. Adding an exercise is a
+registration, not an edit to this file -- which was the point of WP-04, and is
+easy to check: there is no exercise name below the imports.
 """
 from __future__ import annotations
 
@@ -16,9 +21,8 @@ from typing import Optional
 
 import numpy as np
 
-from .pose import extract_landmarks, LM, N_LANDMARKS
+from .pose import extract_landmarks, N_LANDMARKS
 from .filter import smooth_series
-from .angles import squat_angles_per_frame
 from .phase_detection import detect_bottoms, segment_reps, label_phases
 from .render import render_video, save_key_frame, read_frames_exact
 from .coaching import (
@@ -26,8 +30,8 @@ from .coaching import (
     DEFAULT_MODEL as DEFAULT_LLM_MODEL,
 )
 from . import whisper_wrapper
-from ..exercises import squat
-from ..exercises.squat_cues import evaluate_squat
+from ..exercises import mechanics
+from ..exercises.registry import get_spec
 
 
 @dataclass
@@ -65,12 +69,6 @@ def _smooth_landmarks(landmarks, timestamps, min_cutoff, beta):
     return out
 
 
-def _hip_y_series(landmarks):
-    ly = landmarks[:, LM["left_hip"],  1]
-    ry = landmarks[:, LM["right_hip"], 1]
-    return np.nanmean(np.stack([ly, ry], axis=0), axis=0)
-
-
 def _angles_jsonable(angles_per_frame):
     out = []
     for d in angles_per_frame:
@@ -98,15 +96,27 @@ def _world_jsonable(world):
     return out
 
 
-def run_squat_pipeline(input_path, output_root, options: RunOptions = None,
-                       job_id: Optional[str] = None) -> RunResult:
+def run_pipeline(input_path, output_root, exercise: str = "squat",
+                 options: RunOptions = None,
+                 job_id: Optional[str] = None) -> RunResult:
+    """One orchestrator, shared by the CLI and the API, for every exercise.
+
+    Everything exercise-specific arrives through the registry: which angles to
+    compute, how to gate reps, which cues to fire, which joints to colour. There
+    is deliberately no exercise name anywhere below this line -- if one appeared,
+    the abstraction would not be doing its job.
+    """
     options = options or RunOptions()
+    spec = get_spec(exercise)
+    if spec is None:
+        raise ValueError(f"unknown exercise '{exercise}'")
+    movement = spec.movement
     in_path = Path(input_path).resolve()
     if not in_path.exists():
         raise FileNotFoundError(f"input video not found: {in_path}")
 
     if job_id is None:
-        job_id = "squat_{}".format(time.strftime("%Y%m%d_%H%M%S"))
+        job_id = "{}_{}".format(exercise, time.strftime("%Y%m%d_%H%M%S"))
     out_dir = Path(output_root).resolve() / job_id
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -119,29 +129,29 @@ def run_squat_pipeline(input_path, output_root, options: RunOptions = None,
 
     lm_smooth = _smooth_landmarks(pose_data["landmarks"], pose_data["timestamps"],
                                   options.min_cutoff, options.beta)
-    angles = squat_angles_per_frame(lm_smooth)
+    angles = spec.angles(lm_smooth)
 
     # -- phase detection
-    hip_y = _hip_y_series(lm_smooth)
+    hip_y = mechanics.travel_series(lm_smooth, *spec.travel_landmarks)
     hip_y_smooth = smooth_series(hip_y, pose_data["timestamps"],
                                  min_cutoff=0.5, beta=0.001)
     bottoms = detect_bottoms(hip_y_smooth, min_separation=max(3, int(fps * 0.4)))
 
-    # -- side / rep validity (by hip travel) / phases / scoring
+    # -- side / rep validity (by body travel) / phases / scoring
     reps_all = segment_reps(bottoms, n_frames)
-    side = squat.pick_side(lm_smooth, reps_all)
-    scale = squat.body_scale(lm_smooth)
-    reps = squat.keep_real_reps(reps_all, hip_y_smooth, scale,
-                                angles_per_frame=angles, side=side, fps=fps)
+    side = mechanics.pick_side(movement, lm_smooth, reps_all)
+    scale = mechanics.body_scale(movement, lm_smooth)
+    reps = mechanics.keep_real_reps(movement, reps_all, hip_y_smooth, scale,
+                                    angles_per_frame=angles, side=side, fps=fps)
     phases = label_phases(reps, n_frames)
-    scores = squat.score_reps(angles, reps, side, fps)   # (eval_frame, score, breakdown)
-    worst_idx = squat.worst_frame(angles, reps, side, fps)
-    best_idx  = squat.best_frame(angles, reps, side, fps)
+    scores = mechanics.score_reps(movement, angles, reps, side, fps)
+    worst_idx = mechanics.worst_frame(movement, angles, reps, side, fps)
+    best_idx  = mechanics.best_frame(movement, angles, reps, side, fps)
 
     # -- analysis status: be honest when the clip can't be analysed.
     # "valid" = pose present AND anatomically plausible (excludes tracking
     # glitches), so the rate reflects usable frames, not just any detection.
-    valid = sum(1 for a in angles if squat.frame_valid(a, side))
+    valid = sum(1 for a in angles if movement.is_valid(a, side))
     detection_rate = valid / n_frames if n_frames else 0.0
     if not reps:
         status = "no_reps"
@@ -152,8 +162,8 @@ def run_squat_pipeline(input_path, output_root, options: RunOptions = None,
 
     # Fault colouring for the overlay, evaluated per frame rather than only on the
     # single worst one — one red frame in six hundred is a 30th of a second and
-    # reads as "nothing was ever wrong". See squat.flag_frames.
-    flagged = squat.flag_frames(angles, reps, side)
+    # reads as "nothing was ever wrong". See the exercise module.
+    flagged = spec.flag_frames(angles, reps, side)
 
     # -- write angles.json (with world landmarks for the Fit3D path)
     angles_path = out_dir / "angles.json"
@@ -192,7 +202,7 @@ def run_squat_pipeline(input_path, output_root, options: RunOptions = None,
     # -- annotated video + key frames
     annotated_path = out_dir / "annotated.mp4"
     render_video(in_path, lm_smooth, angles, annotated_path,
-                 flagged_per_frame=flagged)
+                 flagged_per_frame=flagged, caption=spec.caption, side=side)
 
     # one exact decode pass for both key frames — see read_frames_exact for why
     # this isn't a seek
@@ -206,14 +216,14 @@ def run_squat_pipeline(input_path, output_root, options: RunOptions = None,
         worst_label = "worst form" if flagged[worst_idx] else "closest to the limit"
         save_key_frame(in_path, worst_idx, lm_smooth[worst_idx], angles[worst_idx],
                        worst_path, flagged[worst_idx], label=worst_label, side=side,
-                       frame=key_frames[worst_idx])
+                       frame=key_frames[worst_idx], caption=spec.caption)
     if best_idx is not None and best_idx in key_frames:
         best_path = out_dir / "best.jpg"
         save_key_frame(in_path, best_idx, lm_smooth[best_idx], angles[best_idx],
                        best_path, set(), label="best", side=side,
-                       frame=key_frames[best_idx])
+                       frame=key_frames[best_idx], caption=spec.caption)
 
-    summary = _build_summary(angles, reps, side, scores)
+    summary = _build_summary(angles, reps, side, scores, movement)
     summary["status"] = status
     summary["detection_rate"] = round(detection_rate, 3)
 
@@ -237,8 +247,8 @@ def run_squat_pipeline(input_path, output_root, options: RunOptions = None,
                         f"voice transcription failed: {e}"
                     )
 
-            evaluation = evaluate_squat(angles, reps, side, fps,
-                                        phase_per_frame=phases, landmarks=lm_smooth)
+            evaluation = spec.evaluate(angles, reps, side, fps,
+                                       phase_per_frame=phases, landmarks=lm_smooth)
             report = generate_coaching_report(
                 evaluation, voice_transcript=voice_text,
                 model=options.llm_model,
@@ -280,13 +290,18 @@ def run_squat_pipeline(input_path, output_root, options: RunOptions = None,
     )
 
 
-def _build_summary(angles, reps, side, scores):
-    knee_key = "knee_left" if side == "left" else "knee_right"
-    series = np.array([a.get(knee_key) for a in angles], dtype=np.float64)
+def _build_summary(angles, reps, side, scores, movement=None):
+    # the angle that flexes, whichever joint that is for this exercise
+    key = movement.primary_angle(side) if movement else ("knee_left" if side == "left" else "knee_right")
+    series = np.array([a.get(key) for a in angles], dtype=np.float64)
     finite = series[np.isfinite(series)]
+    # "knee_*" names are kept because the API schema and the report figures
+    # already use them; for a push-up they carry the elbow. Renaming would ripple
+    # into the response model and the chapter 4 numbers for no gain.
     out = {
         "side": side,
         "rep_count": len(reps),
+        "primary_angle": key,
         "knee_min": float(finite.min()) if finite.size else None,
         "knee_max": float(finite.max()) if finite.size else None,
         "knee_mean": float(finite.mean()) if finite.size else None,
@@ -303,3 +318,11 @@ def _build_summary(angles, reps, side, scores):
             "breakdown": bd,
         })
     return out
+
+
+def run_squat_pipeline(input_path, output_root, options: RunOptions = None,
+                       job_id: Optional[str] = None) -> RunResult:
+    """Squat-shaped alias kept so existing callers and tests do not have to change.
+    It is the same single orchestrator, not a second one."""
+    return run_pipeline(input_path, output_root, "squat", options=options,
+                        job_id=job_id)

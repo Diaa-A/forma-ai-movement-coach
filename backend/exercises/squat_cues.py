@@ -19,6 +19,9 @@ import numpy as np
 from .squat import (frame_valid, LEAN_EXCESS_LIMIT, MIN_CUE_VISIBILITY,
                     DEPTH_FLAG_KNEE_ANGLE as _DEPTH_FLAG_KNEE_ANGLE)
 from .base import ExerciseProfile, SAGITTAL, FRONTAL, coverage_guidance
+# CueHit and Evaluation live in mechanics now (push-up needs them too);
+# re-exported here so existing imports of squat_cues keep working.
+from .mechanics import CueHit, Evaluation  # noqa: F401
 from ..pipeline.pose import LM
 
 
@@ -153,41 +156,6 @@ SQUAT_POSITIVES: Dict[str, dict] = {
 # ----------------------------------------------------------------------------
 # Layer 1 evaluator
 # ----------------------------------------------------------------------------
-
-@dataclass
-class CueHit:
-    flag: str                  # which cue (matches SQUAT_CUES key)
-    severity: str
-    fault: str
-    fix: str
-    joints: List[str] = field(default_factory=list)
-    rep_indices: List[int] = field(default_factory=list)  # which reps fired it
-
-
-@dataclass
-class Evaluation:
-    exercise: str
-    side: str
-    rep_count: int
-    cues_fired: List[CueHit]
-    positives: List[str]       # plain-text positive sentences
-    notes: List[str] = field(default_factory=list)   # diagnostic / informational
-    view_guidance: Optional[str] = None   # actionable camera-view tip, if any
-
-    def primary(self) -> Optional[CueHit]:
-        # The first primary cue that fired, ordered by how many reps it hit.
-        primaries = [c for c in self.cues_fired if c.severity == "primary"]
-        if not primaries:
-            return None
-        return max(primaries, key=lambda c: len(c.rep_indices))
-
-    def secondaries(self, limit=2) -> List[CueHit]:
-        sec = [c for c in self.cues_fired if c.severity == "secondary"]
-        primary = self.primary()
-        # if no primary fired, the most-fired secondary becomes the primary slot
-        # (handled by the report builder, not here)
-        return sec[:limit] if sec else []
-
 
 # Detection thresholds. Kept here (next to the cue text they fire) rather than
 # scattered. Phase D / E may move some of these to per-user calibration.
