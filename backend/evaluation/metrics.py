@@ -80,16 +80,36 @@ def hip_angle_from_joints(xy, side):
     return joint_angle(sh, hip, knee)
 
 
+def elbow_angle_from_joints(xy, side):
+    """Elbow angle (shoulder-elbow-wrist) from a (13,2) joint array.
+
+    Added for the push-up, which is judged on elbow flexion the way the squat is
+    judged on the knee. Penn Action annotates all three joints, so this needs no
+    new ground truth."""
+    sh = xy[_J[f"{side}_shoulder"]]
+    elbow = xy[_J[f"{side}_elbow"]]
+    wrist = xy[_J[f"{side}_wrist"]]
+    if not all(np.all(np.isfinite(p)) for p in (sh, elbow, wrist)):
+        return float("nan")
+    return joint_angle(sh, elbow, wrist)
+
+
 def angle_errors(pred_xy, gt_xy, gt_vis):
-    """Knee + hip angle error (degrees) for one frame, both sides.
+    """Joint-angle error (degrees) for one frame, both sides.
+
+    Computes knee, hip and elbow. Which of them matters depends on the exercise —
+    the squat is judged on the knee, the push-up on the elbow — so all three are
+    accumulated and the caller selects. Cheap to compute and it means a second
+    exercise did not need a second metrics module.
 
     Only computed when all three joints of the triplet are GT-visible AND
     predicted. Returns a dict of {name: abs_error_deg} (missing -> absent).
     """
     out = {}
     for side in ("left", "right"):
-        for name, fn in (("knee", knee_angle_from_joints),
-                         ("hip",  hip_angle_from_joints)):
+        for name, fn in (("knee",  knee_angle_from_joints),
+                         ("hip",   hip_angle_from_joints),
+                         ("elbow", elbow_angle_from_joints)):
             triplet = _triplet_joints(name, side)
             if any(gt_vis[_J[j]] < 0.5 for j in triplet):
                 continue
@@ -103,6 +123,8 @@ def angle_errors(pred_xy, gt_xy, gt_vis):
 def _triplet_joints(name, side):
     if name == "knee":
         return [f"{side}_hip", f"{side}_knee", f"{side}_ankle"]
+    if name == "elbow":
+        return [f"{side}_shoulder", f"{side}_elbow", f"{side}_wrist"]
     return [f"{side}_shoulder", f"{side}_hip", f"{side}_knee"]
 
 

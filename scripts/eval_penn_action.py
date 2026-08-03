@@ -115,27 +115,41 @@ def save_sanity_overlay(seq, pose, idxs, out_path):
     return out_path
 
 
-def plot_per_joint(summary, out_path):
+def _default_output(action):
+    return Path("data/outputs/penn_eval" if action == "squat"
+                else f"data/outputs/penn_eval_{action}")
+
+
+# which joint angle actually matters for each exercise -- the squat is judged on
+# the knee, the push-up on the elbow. Anything unlisted falls back to all of them.
+ANGLES_OF_INTEREST = {
+    "squat": ("knee", "hip"),
+    "pushup": ("elbow",),
+}
+
+
+def plot_per_joint(summary, out_path, action="squat"):
     joints = [j for j in PENN_JOINTS if summary["per_joint_pixel_error"].get(j) is not None]
     vals = [summary["per_joint_pixel_error"][j] for j in joints]
     plt.figure(figsize=(10, 4))
     plt.bar(joints, vals, color="#3b7dd8")
     plt.ylabel("mean pixel error")
-    plt.title("MediaPipe vs Penn Action — per-joint 2D error (squat)")
+    plt.title(f"MediaPipe vs Penn Action — per-joint 2D error ({action})")
     plt.xticks(rotation=45, ha="right")
     plt.tight_layout()
     plt.savefig(out_path, dpi=120)
     plt.close()
 
 
-def plot_angle_hist(all_angle_errs, out_path):
+def plot_angle_hist(all_angle_errs, out_path, action="squat"):
     if not all_angle_errs:
         return
     plt.figure(figsize=(7, 4))
     plt.hist(all_angle_errs, bins=30, color="#46a35e", edgecolor="white")
     plt.xlabel("absolute angle error (degrees)")
     plt.ylabel("frame count")
-    plt.title("Knee + hip angle error: MediaPipe vs Penn Action (squat)")
+    names = " + ".join(n.capitalize() for n in ANGLES_OF_INTEREST.get(action, ("joint",)))
+    plt.title(f"{names} angle error: MediaPipe vs Penn Action ({action})")
     plt.tight_layout()
     plt.savefig(out_path, dpi=120)
     plt.close()
@@ -152,7 +166,13 @@ def main():
     ap.add_argument("--frame-stride", type=int, default=2,
                     help="evaluate every Nth frame (speed)")
     ap.add_argument("--model", default="full", choices=["lite", "full", "heavy"])
-    ap.add_argument("--output", default="data/outputs/penn_eval")
+    # Empty means "derive from the action". The squat keeps the original path
+    # because the report figures already reference it; anything else gets its own
+    # directory. Running push-up with the squat's default would have overwritten
+    # metrics.json and all three figures that Chapter 4 cites.
+    ap.add_argument("--output", default="",
+                    help="results directory (default: data/outputs/penn_eval "
+                         "for squat, penn_eval_<action> otherwise)")
     ap.add_argument("--sanity", action="store_true",
                     help="save GT-vs-prediction overlay images")
     ap.add_argument("--delete-tar", action="store_true",
@@ -160,12 +180,27 @@ def main():
     args = ap.parse_args()
 
     data_root = Path(args.data_root)
-    out_dir = Path(args.output)
+    out_dir = Path(args.output) if args.output else _default_output(args.action)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # extract subset from tar if needed
-    labels_dir = data_root / "labels"
-    if args.tar and not (labels_dir.exists() and any(labels_dir.glob("*.mat"))):
+    # refuse to write one action's results over another's
+    existing = out_dir / "metrics.json"
+    if existing.is_file():
+        try:
+            prev = json.loads(existing.read_text()).get("action")
+        except (json.JSONDecodeError, OSError):
+            prev = None
+        if prev and prev != args.action:
+            print(f"error: {out_dir} holds '{prev}' results; refusing to "
+                  f"overwrite them with '{args.action}'. Pass --output.",
+                  file=sys.stderr)
+            return 1
+
+    # Extract when this ACTION is missing, not merely when labels/ is empty. The
+    # old check looked for any .mat at all, so once the squat subset was present
+    # a --tar run for a different action silently skipped extraction and then
+    # reported "no sequences found".
+    if args.tar and not find_sequences_by_action(data_root, args.action):
         print(f"[+] extracting '{args.action}' clips from {args.tar} ...")
         ids = extract_squats_from_tar(args.tar, data_root,
                                       action_substr=args.action,
@@ -201,9 +236,14 @@ def main():
         overall.pck_total += acc.pck_total
         overall.frames_evaluated += acc.frames_evaluated
         overall.frames_detected += acc.frames_detected
+        wanted = ANGLES_OF_INTEREST.get(args.action)
         for k, v in acc.angle_errors.items():
             overall.angle_errors.setdefault(k, []).extend(v)
-            all_angle_errs.extend(v)
+            # the histogram is the headline figure, so it shows only the joint
+            # this exercise is actually judged on; the full per-joint numbers stay
+            # in metrics.json either way
+            if wanted is None or k.rsplit("_", 1)[0] in wanted:
+                all_angle_errs.extend(v)
         for n, lst in acc_sw.joint_errors.items():
             overall_swapped.joint_errors[n].extend(lst)
 
@@ -228,10 +268,20 @@ def main():
                                   "Check a sanity overlay.")
 
     with open(out_dir / "metrics.json", "w") as fh:
-        json.dump({"aggregate": summary, "per_sequence": per_seq}, fh, indent=2)
+        json.dump({
+            # recorded so a later run for a different exercise can refuse to
+            # overwrite these results, and so a figure can be traced back to
+            # what produced it
+            "action": args.action,
+            "sequences": len(seq_ids),
+            "model": args.model,
+            "frame_stride": args.frame_stride,
+            "aggregate": summary,
+            "per_sequence": per_seq,
+        }, fh, indent=2)
 
-    plot_per_joint(summary, out_dir / "per_joint_error.png")
-    plot_angle_hist(all_angle_errs, out_dir / "angle_error.png")
+    plot_per_joint(summary, out_dir / "per_joint_error.png", args.action)
+    plot_angle_hist(all_angle_errs, out_dir / "angle_error.png", args.action)
 
     # ---- console summary
     print("\n=== aggregate ===")
