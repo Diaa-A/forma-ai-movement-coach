@@ -21,7 +21,21 @@
                      body video is not a feature.
 */
 
-const VERSION = 'v1'
+// Stamped at build time from the emitted asset filenames — see the
+// stamp-service-worker plugin in vite.config.ts.
+//
+// This was the literal string 'v1' and never changed, which is worse than it
+// looks. A browser only re-installs a worker when the FILE'S BYTES differ, so a
+// worker whose contents are identical between builds is never reinstalled:
+// install and activate never re-run, the precached shell from whenever the user
+// installed the app stays forever, and the activate cleanup can never delete
+// anything because KEEP is constant. Anyone who added the app to their home
+// screen would keep that build until they deleted it.
+//
+// That is survivable while the app is only on the developer's phone. It is not
+// survivable during a testing round, where the entire point is shipping fixes
+// between Round 1 and Round 2 to people who already installed it.
+const VERSION = '__BUILD_ID__'
 const SHELL_CACHE = `formcoach-shell-${VERSION}`
 const ASSET_CACHE = `formcoach-assets-${VERSION}`
 const KEEP = [SHELL_CACHE, ASSET_CACHE]

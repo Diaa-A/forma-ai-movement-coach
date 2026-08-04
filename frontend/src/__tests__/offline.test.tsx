@@ -82,4 +82,36 @@ describe('service worker caching policy', () => {
   it('cleans up old caches on activate so a new build cannot serve stale assets', () => {
     expect(sw).toMatch(/caches\.delete/)
   })
+
+  it('leaves a build-id placeholder for the stamping plugin to replace', () => {
+    // The version was the literal 'v1'. A browser only reinstalls a worker whose
+    // file bytes changed, so an unchanging worker is never reinstalled: the
+    // precached shell survives forever and the activate cleanup can never fire,
+    // because the cache names it keeps are constant. Anyone who installed the
+    // app to their home screen would hold that build until they deleted it —
+    // which breaks the one thing user testing needs, shipping fixes between
+    // Round 1 and Round 2 to people who already have it installed.
+    expect(sw).toContain('__BUILD_ID__')
+    expect(sw).not.toMatch(/const VERSION = 'v\d+'/)
+  })
+
+  it('derives both cache names from that version', () => {
+    expect(sw).toMatch(/SHELL_CACHE = `formcoach-shell-\$\{VERSION\}`/)
+    expect(sw).toMatch(/ASSET_CACHE = `formcoach-assets-\$\{VERSION\}`/)
+  })
+})
+
+describe('the built service worker', () => {
+  // Skipped on a clean checkout: dist/ is gitignored, so this only runs where a
+  // build has actually happened. It is the half that proves the plugin ran.
+  const built = resolve(__dirname, '../../dist/sw.js')
+  const exists = (() => {
+    try { readFileSync(built); return true } catch { return false }
+  })()
+
+  it.skipIf(!exists)('has a real build id, not the placeholder', () => {
+    const out = readFileSync(built, 'utf8')
+    expect(out).not.toContain('__BUILD_ID__')
+    expect(out).toMatch(/const VERSION = '[a-f0-9]{12}'/)
+  })
 })
