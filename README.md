@@ -92,11 +92,11 @@ Returns JSON with URLs to artefacts served from `/results/<job_id>/`.
 PY -m pytest
 ```
 
-51 tests: angle maths vs known geometry, One Euro behaviour, phase detection on
-synthetic signals, rep filter, cue gating, and an end-to-end smoke test (the
-smoke test needs `data/test_videos/squat.mp4` and skips itself on a clean
-checkout, where test videos are gitignored — a skip there is expected, not a
-failure).
+142 tests: angle maths vs known geometry, One Euro behaviour, phase detection on
+synthetic signals, rep filter, cue gating, the API's rejection branches, and an
+end-to-end smoke test (the tests that need `data/test_videos/` skip themselves on
+a clean checkout, where test videos are gitignored — a skip there is expected,
+not a failure).
 
 ### Pexels fixture fetcher
 
@@ -107,6 +107,63 @@ PY scripts/fetch_pexels.py --query "squat" --count 5
 Requires `PEXELS_API_KEY` in `.env`. Pulls CC0 clips into
 `data/test_videos/pexels/<query>/` with a `SOURCE.txt` manifest holding the
 licence + photographer credits.
+
+## Deployment (Railway)
+
+The `Dockerfile` builds the PWA and the API into one image, because the backend
+serves the frontend so they share an origin. Railway detects it automatically;
+`railway.json` sets the healthcheck to `/health`.
+
+**Why Railway.** The binding constraint is request duration, not price: a 20 s
+clip takes ~12 s to analyse and a 4K one takes longer, so any host with a 30 s
+request cap is unusable. Railway allows 5 minutes on public networking. Measured
+usage for this app is ~0.1 GB idle and 237 MB peak per analysis, which at
+Railway's published per-second rates comes to roughly $1/month — inside the $5
+credit that comes with the $5/month Hobby plan.
+
+### First deploy
+
+1. Create a Railway account, then **New Project → Deploy from GitHub repo** and
+   pick this repository. It is private, so you will be asked to grant access —
+   keep the repository private (it is assessed coursework).
+2. Railway reads `railway.json` and `Dockerfile`; no build settings to fill in.
+3. Under **Variables**, add `GROQ_API_KEY`. Nothing else is required — CORS stays
+   empty on purpose (the app and the API share an origin, so nothing is ever
+   cross-origin), and `DATA_ROOT` defaults to `data/` inside the image.
+4. Under **Settings → Networking**, generate a domain. HTTPS is issued
+   automatically, which the PWA needs for install and for `MediaRecorder`.
+5. Set a **usage limit** in account settings. Hobby is billed by usage with no
+   hard cap, and a runaway loop should stop rather than bill.
+
+`.env` is gitignored and is never copied into the image — `.dockerignore`
+excludes it as well, so neither path can carry a key.
+
+### Measuring cold and warm latency
+
+WP-03 asks for this and it becomes a figure in the Implementation chapter. Run it
+immediately after triggering a deploy so the boot number means something:
+
+```
+PY scripts/measure_deploy_latency.py https://<your-app>.up.railway.app \
+    --wait-for-boot --runs 3 --out data/outputs/deploy_latency.json
+```
+
+Note what cold start actually consists of here: container boot, Python import
+(~0.5 s, mostly MediaPipe), and first-call delegate init (0.23 s). It is **not**
+model loading — an earlier version of the project notes claimed ~9.5 s went there
+and that was wrong, and it would point any optimisation at the wrong thing.
+Per-frame inference dominates and does not get cheaper on a warm container.
+
+### Two things to know before a testing session
+
+- **The filesystem is ephemeral.** A redeploy wipes `data/outputs`, so any
+  `/results/...` URL a participant still has open stops working. Do not redeploy
+  mid-session. This is not the deletion guarantee either — that is WP-07, and it
+  has to ship before anyone is asked to consent to it.
+- **Concurrency is capped at 6** in the container start command. One analysis
+  peaks at 237 MB and `/analyze` is a sync handler, so the default threadpool of
+  40 would be several gigabytes under load. Past six, requests get a 503, which
+  the app renders as a retryable server error.
 
 ## Setup
 
@@ -193,7 +250,7 @@ Groq-hosted `whisper-large-v3` (Decision 22). This is the offline fallback only.
 │   │   ├── base.py            ExerciseProfile — camera-view / plane gating
 │   │   ├── squat.py           form scoring + side selection + worst/best
 │   │   └── squat_cues.py      Layer 1 — cue database + evaluator
-│   └── tests/                 51 pytest tests
+│   └── tests/                 142 pytest tests
 ├── frontend/                  the PWA (React + Vite); built output is served by FastAPI
 │   ├── public/                manifest, service worker, icons
 │   └── src/
