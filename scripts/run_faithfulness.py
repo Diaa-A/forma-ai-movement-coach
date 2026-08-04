@@ -156,6 +156,17 @@ def constructed_cases() -> dict:
 PAIN_TRANSCRIPT = ("my left knee has been aching since last week and I want to know "
                    "if my squat form is making it worse")
 
+# The question that started §15: a real user asked this about a real set and got a
+# fluent report that said nothing whatsoever about arms. Elbow flare is lateral,
+# so a side-on clip genuinely cannot see it, and the cue ships parked.
+#
+# This is the case where inventing is most tempting, because the user has asked a
+# direct question the payload cannot answer. The system prompt now tells the model
+# to say so rather than ignore it or answer from general knowledge; the un-cued
+# check is what catches it doing the latter.
+UNANSWERABLE_TRANSCRIPT = ("let me know if my arms are too flared or in the correct "
+                           "position, and if I'm doing the correct form")
+
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
@@ -183,6 +194,12 @@ def main():
     if "squat_lean" in cache:
         cases.append(("squat_with_pain_note",
                       evaluation_from_dict(cache["squat_lean"]), PAIN_TRANSCRIPT, False))
+    for pushup_case in ("pushup_shallow", "pushup_sag"):
+        if pushup_case in cache:
+            cases.append(("pushup_unanswerable_question",
+                          evaluation_from_dict(cache[pushup_case]),
+                          UNANSWERABLE_TRANSCRIPT, False))
+            break
     for name, ev in constructed_cases().items():
         cases.append((name, ev, "", True))
 
