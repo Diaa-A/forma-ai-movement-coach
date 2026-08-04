@@ -7,7 +7,17 @@ requirements.txt minimal and works offline (dry-run mode) when there's no key.
 Safety contract (mirrors what the system prompt enforces):
     - LLM may rephrase the cues we provide but MUST NOT introduce new
       biomechanical claims, weights, or rep counts.
-    - LLM never sees raw landmarks or angles — only the Layer 1 evaluation.
+    - **The LLM sees derived summary statistics produced by Layer 1, never raw
+      per-frame data, and never decides what is wrong.** This used to read "never
+      sees raw landmarks or angles", which was half right and half not:
+      `evaluation.notes` does carry derived angle values into the prompt — the
+      worked example hands the model "trunk averaged 23 degrees more inclined
+      than the shins". The input restriction is structural and worth claiming;
+      it just is not the claim that was written here, and the same wording was
+      heading into the report.
+    - The output is validated against the schema below rather than trusted. A
+      response missing a required field is treated as a failure, not shown to
+      the user with a blank where the finding should be.
     - If GROQ_API_KEY is unset, we fall back to a deterministic synthetic
       report built from the cue text directly. This keeps the rest of the
       pipeline testable without an external account.
@@ -165,6 +175,67 @@ def _call_groq(system_prompt: str, user_prompt: str, model: str,
         raise RuntimeError(f"Groq API error {e.code}: {err_body}") from e
 
 
+class LLMContractError(RuntimeError):
+    """The model returned JSON that does not meet the output contract.
+
+    Its own class so the harness in `backend/evaluation/faithfulness.py` can tell
+    a contract breach apart from a network failure — they are different findings.
+    """
+
+
+def _text(value) -> str:
+    return value.strip() if isinstance(value, str) else ""
+
+
+def _string_list(value, field: str) -> List[str]:
+    """A list of non-empty strings, or an error naming what arrived instead.
+
+    Empty lists are allowed: a set with no positives legitimately produces an
+    empty `what_went_well`, and forcing a fallback there would replace a correct
+    answer with a worse one.
+    """
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise LLMContractError(f"{field} should be a list, got {type(value).__name__}")
+    out = [_text(v) for v in value]
+    return [v for v in out if v]
+
+
+def _validate(parsed: dict) -> dict:
+    """Check the model's JSON against the schema the system prompt asks for.
+
+    Nothing validated this before: `generate_coaching_report` read every field
+    with `parsed.get(...)` and passed it straight through, so a response that
+    omitted `primary_issue` showed the user an empty finding where the main
+    conclusion should be. Silent degradation, and the exact shape of failure the
+    rest of this pipeline refuses everywhere else.
+
+    The two scalars are required because each is a claim in its own right. The
+    lists may be empty. A breach raises, which puts us on the same fallback path
+    as a network failure -- the deterministic cue wording, which is always
+    correct if stiffer.
+    """
+    if not isinstance(parsed, dict):
+        raise LLMContractError(f"expected a JSON object, got {type(parsed).__name__}")
+
+    primary = _text(parsed.get("primary_issue"))
+    if not primary:
+        raise LLMContractError("primary_issue missing or empty")
+
+    focus = _text(parsed.get("next_session_focus"))
+    if not focus:
+        raise LLMContractError("next_session_focus missing or empty")
+
+    return {
+        "what_went_well": _string_list(parsed.get("what_went_well"), "what_went_well"),
+        "primary_issue": primary,
+        "secondary_issues": _string_list(parsed.get("secondary_issues"), "secondary_issues"),
+        "corrective_cues": _string_list(parsed.get("corrective_cues"), "corrective_cues"),
+        "next_session_focus": focus,
+    }
+
+
 def _parse_llm_response(api_response: dict) -> dict:
     try:
         content = api_response["choices"][0]["message"]["content"]
@@ -291,13 +362,9 @@ def generate_coaching_report(evaluation: Evaluation,
     user_prompt = _build_user_prompt(evaluation, voice_transcript)
     try:
         raw = _call_groq(SYSTEM_PROMPT, user_prompt, model, api_key)
-        parsed = _parse_llm_response(raw)
+        fields = _validate(_parse_llm_response(raw))
         return CoachingReport(
-            what_went_well=parsed.get("what_went_well", []),
-            primary_issue=parsed.get("primary_issue", ""),
-            secondary_issues=parsed.get("secondary_issues", []),
-            corrective_cues=parsed.get("corrective_cues", []),
-            next_session_focus=parsed.get("next_session_focus", ""),
+            **fields,
             source="llm",
             model=model,
             filming_tip=tip,

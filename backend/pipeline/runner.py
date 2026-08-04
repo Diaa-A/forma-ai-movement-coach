@@ -296,7 +296,7 @@ def run_pipeline(input_path, output_root, exercise: str = "squat",
                     "rep_count": evaluation.rep_count,
                     "cues_fired": [
                         {
-                            " flag": c.flag, "severity": c.severity,
+                            "flag": c.flag, "severity": c.severity,
                             "fault": c.fault, "fix": c.fix,
                             "rep_indices": c.rep_indices,
                         } for c in evaluation.cues_fired
