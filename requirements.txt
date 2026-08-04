@@ -1,25 +1,22 @@
 # Pinned to the versions this project was built and validated against
 # (Python 3.13 — see README for why not 3.11).
+#
+# `pip install -r requirements.txt` still installs everything, exactly as before.
+# The runtime half now lives in its own file so the deployed image can install
+# only that, and leave the test runner and the evaluation harness behind.
 
-# Core pipeline (Phases A-B)
-mediapipe==0.10.35
+-r requirements-runtime.txt
+
+# The GUI build of OpenCV, for development. The container replaces it with
+# opencv-contrib-python-headless at this same version — the same OpenCV minus
+# highgui, which nothing here uses. Kept as the development default because it is
+# what the 142 tests and the Penn Action benchmark were run against.
 opencv-python==4.13.0.92
-numpy==2.2.6
 
-# Annotated-video encoding (Decision 24). Ships a static ffmpeg binary per
-# platform, so there is no "install ffmpeg first" step in the setup. OpenCV on
-# its own can only write MPEG-4 Part 2 here, which no browser will play.
-# ~31 MB to download, ~88 MB on disk once unpacked.
-imageio-ffmpeg==0.6.0
-
-# Evaluation harness (Phase H) — Penn Action .mat labels + plots
+# Evaluation harness (Phase H) — Penn Action .mat labels. Not imported by the API
+# (checked against sys.modules after importing backend.main), so it stays out of
+# the image.
 scipy==1.17.1
-matplotlib==3.10.9
-
-# API server (Phase E)
-fastapi==0.136.3
-uvicorn[standard]==0.49.0
-python-multipart==0.0.32
 
 # Tests
 pytest==9.1.1

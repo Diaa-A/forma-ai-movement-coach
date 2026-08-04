@@ -64,11 +64,25 @@ WORKDIR /app
 # test and the encoder tests. The only difference between the builds is highgui,
 # and the 16 cv2 APIs this project uses are all core, imgproc, imgcodecs and
 # videoio.
-COPY requirements.txt ./
-RUN python -m pip install --upgrade pip \
- && python -m pip install -r requirements.txt \
- && python -m pip uninstall -y opencv-python opencv-contrib-python \
- && python -m pip install opencv-contrib-python-headless==4.13.0.92
+# One command per RUN, deliberately. The first version chained the pip upgrade,
+# the install and the OpenCV swap behind &&, and when it failed the build log
+# reported the whole chain as the failing command - which says nothing about
+# which part of it broke. Separate steps cost a few cache layers and buy a log
+# that names the actual step.
+#
+# The pip self-upgrade that used to be first is gone. It was never necessary -
+# the base image ships a current pip - and it is a known-fragile thing to do
+# inside a Docker build, because pip uninstalls itself and then rewrites itself
+# on an overlay filesystem. It was also the command sitting at the failure last
+# time. Using the pip the image ships with is the more reproducible choice
+# anyway: one fewer thing that can differ between two builds of the same commit.
+COPY requirements-runtime.txt ./
+RUN python -m pip install --no-compile -r requirements-runtime.txt
+
+# mediapipe requires opencv-contrib-python, so it arrives whatever the
+# requirements say. Swapped here for the headless build at the same version.
+RUN python -m pip uninstall -y opencv-contrib-python
+RUN python -m pip install --no-compile opencv-contrib-python-headless==4.13.0.92
 
 # The pose models are committed (~15 MB) rather than fetched during the build, so
 # an image build cannot fail on somebody else's CDN and two builds of the same
