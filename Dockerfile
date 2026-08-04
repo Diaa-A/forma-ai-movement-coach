@@ -42,16 +42,33 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# No apt step, and that is the point.
+# MediaPipe's own C bindings need the GL stack, and they load it LAZILY - not at
+# `import mediapipe`, but the first time a task is created. So a container
+# without these builds fine, imports fine, starts fine, passes its healthcheck,
+# and then returns 500 on every analysis with:
 #
-# The first version installed libgl1 and libglib2.0-0, because the GUI builds of
-# OpenCV link libGL and glib even though nothing here ever draws to a screen.
-# That step is what failed on Railway, twice, and the package names were not the
-# reason - both exist in bookworm at exactly those names, checked against the
-# Debian index. The error text was truncated in the build log, so rather than
-# guess at it again the step is gone.
+#   OSError: libGLESv2.so.2: cannot open shared object file
 #
-# It can be gone because mediapipe requires opencv-contrib-python, so a plain
+# which is exactly what the first deployment did. libgles2 provides
+# libGLESv2.so.2 and libegl1 provides libEGL.so.1 (both checked against the
+# Debian bookworm file lists, which is why the base tag pins bookworm - the
+# glib package is renamed in trixie). libgl1 and libglib2.0-0 are the pair the
+# GL stack pulls in alongside them.
+#
+# An earlier version of this file removed the apt step entirely, on the theory
+# that it was what kept failing the build. It was not - the build failures were
+# a frontend type error cancelling this stage in parallel. Removing it is what
+# produced the runtime crash above.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      libgles2 libegl1 libgl1 libglib2.0-0 \
+ && rm -rf /var/lib/apt/lists/*
+
+# OpenCV stays headless. That swap was made for the wrong reason but it is
+# independently correct: nothing here draws to a screen, the headless build is
+# smaller, and decoding was confirmed working in the deployed container.
+#
+# mediapipe requires opencv-contrib-python, so a plain
 # "use headless instead" in requirements.txt does not work - pip installs the GUI
 # build anyway to satisfy mediapipe. The swap has to happen after the install,
 # which is what the uninstall below is for. `pip check` will report mediapipe's
@@ -98,17 +115,32 @@ COPY --from=frontend /build/dist ./frontend/dist
 # a redeploy is an accident, not a retention policy.
 RUN mkdir -p data/uploads data/outputs
 
-# Import everything at build time. Two reasons, both learned the hard way here.
+# Build-time smoke test, and it has to go deeper than an import.
 #
-# If a native library really is missing, this fails now with an ImportError that
-# names the missing .so, instead of building green and then failing the
-# healthcheck with nothing useful in the log. mediapipe's own binaries might yet
-# want something the headless swap removed - this is the check that would say so,
-# and say which.
+# The previous version of this line was `import cv2, mediapipe, backend.main`.
+# It passed, the image shipped, and every analysis failed with a missing
+# libGLESv2.so.2 - because importing mediapipe does not load its C bindings.
+# Those load when a task is CREATED, which is the first thing a real request
+# does and the last thing a build was checking.
 #
-# It also boots the app, so a configuration mistake is a failed build rather than
-# a failed deploy.
-RUN python -c "import cv2, mediapipe, backend.main; print('imports ok:', cv2.__version__)"
+# So this constructs an actual PoseLandmarker against the real model file, in
+# VIDEO mode, exactly as extract_landmarks does. Any missing native library now
+# fails the build with the name of the missing object, instead of producing a
+# container that builds green, starts green, passes its healthcheck and 500s on
+# every upload.
+#
+# It also proves the model file is present at the path pose.py resolves, which
+# no import could tell us.
+RUN python -c "\
+import cv2, backend.main; \
+from mediapipe.tasks import python as mp_tasks; \
+from mediapipe.tasks.python import vision as mp_vision; \
+from backend.pipeline.pose import _model_path; \
+opts = mp_vision.PoseLandmarkerOptions( \
+    base_options=mp_tasks.BaseOptions(model_asset_path=_model_path('full')), \
+    running_mode=mp_vision.RunningMode.VIDEO, num_poses=1); \
+mp_vision.PoseLandmarker.create_from_options(opts).close(); \
+print('smoke ok: cv2', cv2.__version__, '+ landmarker constructed')"
 
 RUN useradd --create-home --uid 10001 coach && chown -R coach:coach /app
 USER coach
