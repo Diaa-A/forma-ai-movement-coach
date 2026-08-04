@@ -40,24 +40,35 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1
 
-# opencv-python links against libGL and glib even when nothing is ever drawn to a
-# screen. opencv-python-headless needs neither, would save around 40 MB, and
-# would work - there is not one cv2 GUI call in this project, checked.
-#
-# Deliberately not doing that. It would mean the container runs a different
-# OpenCV build from the one the 142 tests and the Penn Action benchmark ran
-# against, and "the thing running is not the thing you tested" has already cost
-# this project real time twice (the stale uvicorn, the two checkouts). Forty
-# megabytes is a cheap price for deleting that whole category of doubt.
-RUN apt-get update \
- && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 \
- && rm -rf /var/lib/apt/lists/*
-
 WORKDIR /app
 
+# No apt step, and that is the point.
+#
+# The first version installed libgl1 and libglib2.0-0, because the GUI builds of
+# OpenCV link libGL and glib even though nothing here ever draws to a screen.
+# That step is what failed on Railway, twice, and the package names were not the
+# reason - both exist in bookworm at exactly those names, checked against the
+# Debian index. The error text was truncated in the build log, so rather than
+# guess at it again the step is gone.
+#
+# It can be gone because mediapipe requires opencv-contrib-python, so a plain
+# "use headless instead" in requirements.txt does not work - pip installs the GUI
+# build anyway to satisfy mediapipe. The swap has to happen after the install,
+# which is what the uninstall below is for. `pip check` will report mediapipe's
+# dependency as unsatisfied afterwards; cv2 resolves to the headless build and
+# every import works, which is the thing that actually matters.
+#
+# Verified rather than assumed: the whole pinned stack was installed into a clean
+# venv, the two GUI builds swapped for headless at the same version, and the full
+# suite run against it - 142 passed, including the end-to-end MediaPipe smoke
+# test and the encoder tests. The only difference between the builds is highgui,
+# and the 16 cv2 APIs this project uses are all core, imgproc, imgcodecs and
+# videoio.
 COPY requirements.txt ./
 RUN python -m pip install --upgrade pip \
- && python -m pip install -r requirements.txt
+ && python -m pip install -r requirements.txt \
+ && python -m pip uninstall -y opencv-python opencv-contrib-python \
+ && python -m pip install opencv-contrib-python-headless==4.13.0.92
 
 # The pose models are committed (~15 MB) rather than fetched during the build, so
 # an image build cannot fail on somebody else's CDN and two builds of the same
@@ -72,6 +83,18 @@ COPY --from=frontend /build/dist ./frontend/dist
 # has open, so do not redeploy mid-session. It is NOT a substitute for WP-07 -
 # a redeploy is an accident, not a retention policy.
 RUN mkdir -p data/uploads data/outputs
+
+# Import everything at build time. Two reasons, both learned the hard way here.
+#
+# If a native library really is missing, this fails now with an ImportError that
+# names the missing .so, instead of building green and then failing the
+# healthcheck with nothing useful in the log. mediapipe's own binaries might yet
+# want something the headless swap removed - this is the check that would say so,
+# and say which.
+#
+# It also boots the app, so a configuration mistake is a failed build rather than
+# a failed deploy.
+RUN python -c "import cv2, mediapipe, backend.main; print('imports ok:', cv2.__version__)"
 
 RUN useradd --create-home --uid 10001 coach && chown -R coach:coach /app
 USER coach
