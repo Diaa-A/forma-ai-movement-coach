@@ -104,7 +104,34 @@ def api_index():
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    """Liveness, plus which of the optional services this deployment actually has.
+
+    Booleans about configuration only — never a key, never a length, never a
+    prefix. "Is a key present" is not a secret; the key is.
+
+    This exists because a deployment can be completely healthy and still be
+    running in a degraded mode nobody notices. Ours was: `GROQ_API_KEY` was set in
+    the platform's variables and was not reaching the process, so coaching quietly
+    fell back to the cue database and every voice note failed to transcribe. The
+    app behaved exactly as designed — it says so in the provenance line — but from
+    the outside the only way to find out was to upload a video and read the
+    `source` field, and the only way to tell "key missing" from "key rejected" was
+    to read the source code.
+
+    A deployment should be able to answer "am I fully configured" without being
+    sent a video of somebody exercising.
+    """
+    groq_key = os.environ.get("GROQ_API_KEY") or ""
+    has_groq = bool(groq_key.strip())
+    return {
+        "status": "ok",
+        "services": {
+            # what the user would actually get right now, in their terms
+            "coaching": "llm" if has_groq else "cue_database_only",
+            "transcription": "groq" if has_groq else "unavailable",
+        },
+        "degraded": not has_groq,
+    }
 
 
 # ---------------------------------------------------------------------------
