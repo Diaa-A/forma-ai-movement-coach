@@ -22,8 +22,32 @@ class ExerciseOut(BaseModel):
     assesses: dict
 
 
+class LimitsOut(BaseModel):
+    """What /analyze will accept, served rather than duplicated.
+
+    The PWA checks a file before uploading it, which needs the same numbers the
+    server enforces. Those numbers were being kept as a second hand-maintained
+    copy in the frontend — with a comment admitting it — and the copy had already
+    drifted: it claimed a server-side 3-45 second gate that did not exist. This is
+    the same argument as `filming_guide`, and it has the same answer.
+
+    `min_seconds` / `max_seconds` are what the server refuses outside of.
+    `ideal_*` is the range that gives a good read, which the UI warns about but
+    does not block.
+    """
+    max_video_bytes: int
+    max_audio_bytes: int
+    video_suffixes: List[str]
+    audio_suffixes: List[str]
+    min_seconds: float
+    max_seconds: float
+    ideal_min_seconds: float
+    ideal_max_seconds: float
+
+
 class ExercisesResponse(BaseModel):
     exercises: List[ExerciseOut]
+    limits: LimitsOut
 
 
 class KeyFrame(BaseModel):

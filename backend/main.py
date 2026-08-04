@@ -12,6 +12,7 @@ Then POST a video:
 Outputs go to data/outputs/<job_id>/ and are served back under /results/<job_id>/.
 Uploaded originals go to data/uploads/<job_id>/.
 """
+import logging
 import os
 from pathlib import Path
 
@@ -38,15 +39,41 @@ def _load_dotenv(path=".env"):
 
 _load_dotenv()
 
+# Nothing in the backend logged anywhere before this, which is awkward when the
+# whole point of returning an opaque 500 is that the detail went to the log
+# instead. Configured here because this is the entry point; the CLI gets Python's
+# default behaviour, which puts warnings and errors on stderr, and that is right
+# for a CLI.
+logging.basicConfig(
+    level=os.environ.get("LOG_LEVEL", "INFO"),
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
+
 app = FastAPI(title="AI Fitness & Movement Coach", version="0.1.0")
 
-# CORS — wide-open for dev. Phase F (PWA) tightens this to known origins.
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# CORS is off by default, which is not an oversight.
+#
+# The PWA is served by this same app (see the mount at the bottom of this file),
+# so in production the browser is talking to its own origin and no CORS header is
+# involved. In dev the Vite server proxies /analyze and /exercises to this port,
+# so the browser thinks it is same-origin there too. There is currently no caller
+# that needs an Access-Control-Allow-Origin header at all, and allow_origins=["*"]
+# meant any page on the internet could POST a video here from a visitor's browser
+# and read the analysis back.
+#
+# CORS_ALLOW_ORIGINS is the escape hatch for when that stops being true — the
+# frontend hosted separately, or a second client. Comma-separated, exact origins.
+_cors_origins = [o.strip() for o in os.environ.get("CORS_ALLOW_ORIGINS", "").split(",")
+                 if o.strip()]
+if _cors_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_cors_origins,
+        allow_methods=["GET", "POST"],
+        allow_headers=["*"],
+        # so a client on another origin can still read the reference on a 500
+        expose_headers=["X-Error-Reference"],
+    )
 
 # serve the per-job output dir as static files so the API can return URLs
 # directly to the annotated mp4 and key-frame JPEGs

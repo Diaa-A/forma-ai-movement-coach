@@ -7,40 +7,78 @@ in `backend.main` serves.
 from __future__ import annotations
 
 import json
+import logging
+import os
+import secrets
 import shutil
-import time
 from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
-from ..pipeline.runner import run_pipeline, RunOptions, RunResult
+from ..pipeline.probe import duration_seconds
+from ..pipeline.runner import run_pipeline, new_job_id, RunOptions, RunResult
 from ..exercises.registry import PROFILES, exercise_ids
 from .schemas import (AnalyzeResponse, KeyFrame, RepStat, CoachingReportOut,
-                      ExerciseOut, ExercisesResponse)
+                      ExerciseOut, ExercisesResponse, LimitsOut)
 
 
 router = APIRouter()
 
+log = logging.getLogger("coach.api")
 
-# upload + output roots. Keep them sibling so the /results static mount in
-# backend.main serves both the uploaded original and the rendered artefacts.
-DATA_ROOT       = Path("data")
+
+# Upload + output roots, kept sibling so the /results static mount in backend.main
+# serves both the uploaded original and the rendered artefacts.
+#
+# The default is absolute and anchored to the repo rather than to the working
+# directory. It used to be Path("data"), which quietly means "data relative to
+# wherever this process was started" — fine when that is always the repo root, and
+# a deployment where artefacts land somewhere unexpected and /results serves an
+# empty directory as soon as it is not.
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+DATA_ROOT       = Path(os.environ.get("DATA_ROOT") or (_REPO_ROOT / "data"))
 UPLOAD_ROOT     = DATA_ROOT / "uploads"
 OUTPUT_ROOT     = DATA_ROOT / "outputs"
 
 
 MAX_VIDEO_BYTES = 100 * 1024 * 1024     # 100MB — generous but bounded
+MAX_AUDIO_BYTES = 10 * 1024 * 1024
 ALLOWED_VIDEO_SUFFIXES = {".mp4", ".mov", ".webm", ".m4v"}
-ALLOWED_AUDIO_SUFFIXES = {".wav", ".mp3", ".m4a", ".webm", ".ogg"}
+# .mp4 is here because Safari's MediaRecorder produced MP4/AAC only until 18.4, so
+# an iOS voice note arrives as audio/mp4. The frontend has been renaming those to
+# .m4a to get past this list — same container, but the workaround only exists
+# because the list was wrong.
+ALLOWED_AUDIO_SUFFIXES = {".wav", ".mp3", ".m4a", ".mp4", ".webm", ".ogg"}
 # derived from the profile registry, not written out again here — one list means
 # the allowlist and the exercise picker can't drift apart. push-up / pull-up
 # arrive by registering their profile (Phase G).
 ALLOWED_EXERCISES = set(PROFILES)
 
+# Hard band the server refuses outside of. The spec asks for 5-30 s, which is the
+# ideal pair below; the hard band is looser so a slightly long clip is analysed
+# rather than thrown away. Under 3 s cannot hold a full rep, and over 45 s is
+# minutes of pose inference for a set nobody needs analysed in full.
+MIN_CLIP_SECONDS = 3.0
+MAX_CLIP_SECONDS = 45.0
+IDEAL_MIN_SECONDS = 5.0
+IDEAL_MAX_SECONDS = 30.0
 
-def _save_upload(up: UploadFile, dest: Path, max_bytes: int):
+
+def _mb(n_bytes: int) -> str:
+    """Byte counts in the units a person reads. The 413 used to say 'upload
+    exceeds 104857600 bytes', on a phone."""
+    return "{:.0f} MB".format(n_bytes / (1024 * 1024))
+
+
+def _save_upload(up: UploadFile, dest: Path, max_bytes: int, what: str):
+    """Stream an upload to disk, stopping if it goes over the cap.
+
+    Streamed rather than read whole so a 100 MB clip is never held in memory.
+    `what` names the file in the error, because "upload exceeds the limit" does
+    not tell someone whether it was their video or their voice note.
+    """
     dest.parent.mkdir(parents=True, exist_ok=True)
     written = 0
     with dest.open("wb") as fh:
@@ -52,9 +90,22 @@ def _save_upload(up: UploadFile, dest: Path, max_bytes: int):
             if written > max_bytes:
                 fh.close()
                 dest.unlink(missing_ok=True)
-                raise HTTPException(413, f"upload exceeds {max_bytes} bytes")
+                raise HTTPException(
+                    413, f"That {what} is over the {_mb(max_bytes)} limit.")
             fh.write(chunk)
     return dest
+
+
+def _discard(upload_dir: Path):
+    """Remove a staged upload we have decided not to analyse.
+
+    Rejections used to leave the video on disk: the audio suffix is checked after
+    the video has been written, so a bad voice-note extension cost a full upload
+    and left it there. Nothing has been analysed at these points, so there is no
+    reason to keep the file — and until WP-07 ships there is nothing else that
+    would ever remove it.
+    """
+    shutil.rmtree(upload_dir, ignore_errors=True)
 
 
 @router.get("/exercises", response_model=ExercisesResponse)
@@ -66,16 +117,37 @@ def exercises():
     placement is the single biggest cause of a clip we can't assess properly
     (Decision 23), and it's much cheaper to prevent than to detect.
     """
-    return ExercisesResponse(exercises=[
-        ExerciseOut(
-            id=ex_id,
-            name=PROFILES[ex_id].label,
-            view_label=PROFILES[ex_id].view_label,
-            filming_guide=PROFILES[ex_id].filming_guide,
-            assesses=PROFILES[ex_id].plane_assessments,
-        )
-        for ex_id in exercise_ids()
-    ])
+    return ExercisesResponse(
+        exercises=[
+            ExerciseOut(
+                id=ex_id,
+                name=PROFILES[ex_id].label,
+                view_label=PROFILES[ex_id].view_label,
+                filming_guide=PROFILES[ex_id].filming_guide,
+                assesses=PROFILES[ex_id].plane_assessments,
+            )
+            for ex_id in exercise_ids()
+        ],
+        limits=current_limits(),
+    )
+
+
+def current_limits() -> LimitsOut:
+    """The upload constraints, read straight off the constants the route enforces.
+
+    Built here rather than written out again so the served numbers cannot say one
+    thing while /analyze does another.
+    """
+    return LimitsOut(
+        max_video_bytes=MAX_VIDEO_BYTES,
+        max_audio_bytes=MAX_AUDIO_BYTES,
+        video_suffixes=sorted(ALLOWED_VIDEO_SUFFIXES),
+        audio_suffixes=sorted(ALLOWED_AUDIO_SUFFIXES),
+        min_seconds=MIN_CLIP_SECONDS,
+        max_seconds=MAX_CLIP_SECONDS,
+        ideal_min_seconds=IDEAL_MIN_SECONDS,
+        ideal_max_seconds=IDEAL_MAX_SECONDS,
+    )
 
 
 @router.post("/analyze", response_model=AnalyzeResponse)
@@ -87,7 +159,7 @@ def analyze(
     pose_model: str = Form("full"),
     dry_run_coach: bool = Form(False),
 ):
-    # ---- validate
+    # ---- validate everything cheap before writing a byte
     if exercise_type not in ALLOWED_EXERCISES:
         raise HTTPException(400, f"unsupported exercise_type '{exercise_type}'. "
                                  f"Supported: {sorted(ALLOWED_EXERCISES)}")
@@ -97,19 +169,42 @@ def analyze(
         raise HTTPException(400, f"unsupported video format '{suffix}'. "
                                  f"Supported: {sorted(ALLOWED_VIDEO_SUFFIXES)}")
 
-    # ---- stage uploads
-    job_id = f"{exercise_type}_{time.strftime('%Y%m%d_%H%M%S')}"
-    upload_dir = UPLOAD_ROOT / job_id
-    video_path = _save_upload(video, upload_dir / f"input{suffix}", MAX_VIDEO_BYTES)
-
-    voice_path = ""
+    # The audio suffix is checked here rather than after the video is saved. It
+    # used to be checked later, which meant a mistyped voice-note extension was
+    # only discovered once the whole clip had been uploaded and written to disk.
+    a_suffix = ""
     if voice_note is not None and voice_note.filename:
         a_suffix = Path(voice_note.filename).suffix.lower()
         if a_suffix not in ALLOWED_AUDIO_SUFFIXES:
-            raise HTTPException(400, f"unsupported audio format '{a_suffix}'")
+            raise HTTPException(400, f"unsupported audio format '{a_suffix}'. "
+                                     f"Supported: {sorted(ALLOWED_AUDIO_SUFFIXES)}")
+
+    # ---- stage uploads
+    job_id = new_job_id(exercise_type)
+    upload_dir = UPLOAD_ROOT / job_id
+    video_path = _save_upload(video, upload_dir / f"input{suffix}",
+                              MAX_VIDEO_BYTES, "clip")
+
+    # Length is only knowable once the file is here. Checked before the pipeline
+    # starts, because the alternative is spending twelve seconds a clip-minute
+    # discovering that somebody uploaded a whole training session.
+    seconds = duration_seconds(video_path)
+    if seconds is not None and not (MIN_CLIP_SECONDS <= seconds <= MAX_CLIP_SECONDS):
+        _discard(upload_dir)
+        if seconds < MIN_CLIP_SECONDS:
+            raise HTTPException(
+                400, f"That clip is {seconds:.1f}s, which is too short to hold a "
+                     f"full rep. Aim for {IDEAL_MIN_SECONDS:.0f}-"
+                     f"{IDEAL_MAX_SECONDS:.0f} seconds.")
+        raise HTTPException(
+            400, f"That clip is {seconds:.0f}s and the limit is "
+                 f"{MAX_CLIP_SECONDS:.0f}s. Trim it to a few good reps.")
+
+    voice_path = ""
+    if a_suffix:
         voice_path = str(_save_upload(voice_note,
                                       upload_dir / f"voice{a_suffix}",
-                                      10 * 1024 * 1024))
+                                      MAX_AUDIO_BYTES, "voice note"))
 
     # ---- run pipeline (same code as the CLI)
     opts = RunOptions(
@@ -129,10 +224,22 @@ def analyze(
                               options=opts, job_id=job_id)
     except FileNotFoundError as e:
         raise HTTPException(400, str(e))
-    except Exception as e:
-        # don't leak internals — log server-side, return generic
-        # in dev we keep the message; in prod swap for an opaque error
-        raise HTTPException(500, f"pipeline error: {e}")
+    except Exception:
+        # Whatever went wrong here is ours, and the detail is ours too — it used
+        # to be interpolated straight into the response, so a stack of internal
+        # paths and module names went to whoever sent the request. The reference
+        # is the compromise: the user gets something short they can quote, and it
+        # ties their report to the traceback in the log without either of us
+        # guessing which run they meant. It rides in a header so the rule that 5xx
+        # bodies are never shown to users stays intact on the client.
+        ref = secrets.token_hex(4)
+        log.exception("analyze failed (ref %s, job %s, exercise %s)",
+                      ref, job_id, exercise_type)
+        raise HTTPException(
+            500,
+            "Something went wrong while analysing that clip.",
+            headers={"X-Error-Reference": ref},
+        )
 
     return _build_response(result, exercise_type)
 
