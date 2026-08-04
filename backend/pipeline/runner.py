@@ -12,8 +12,10 @@ easy to check: there is no exercise name below the imports.
 from __future__ import annotations
 
 import json
+import logging
 import math
 import os
+import secrets
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -32,6 +34,24 @@ from .coaching import (
 from . import whisper_wrapper
 from ..exercises import mechanics
 from ..exercises.registry import get_spec
+
+
+log = logging.getLogger("coach.pipeline")
+
+
+def new_job_id(exercise: str) -> str:
+    """A job id has to be unique, not merely descriptive.
+
+    The timestamp on its own collides for two uploads inside the same second, and
+    that is not hypothetical: /analyze is a plain `def`, so FastAPI runs it in a
+    threadpool and two people sharing a link genuinely run at once. Both would
+    resolve to the same job directory, the second would overwrite the first, and
+    the first person's /results URL would then serve the second person's video and
+    key frames. Six hex characters make that collision not worth thinking about
+    while keeping the timestamp readable, which is what the id is for.
+    """
+    return "{}_{}_{}".format(exercise, time.strftime("%Y%m%d_%H%M%S"),
+                             secrets.token_hex(3))
 
 
 @dataclass
@@ -116,7 +136,7 @@ def run_pipeline(input_path, output_root, exercise: str = "squat",
         raise FileNotFoundError(f"input video not found: {in_path}")
 
     if job_id is None:
-        job_id = "{}_{}".format(exercise, time.strftime("%Y%m%d_%H%M%S"))
+        job_id = new_job_id(exercise)
     out_dir = Path(output_root).resolve() / job_id
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -231,8 +251,12 @@ def run_pipeline(input_path, output_root, exercise: str = "squat",
     coaching_path = None
     if options.coach:
         if status != "ok":
-            # nothing to coach — emit an honest report and skip the LLM entirely
-            report = not_analyzed_report(status)
+            # nothing to coach — emit an honest report and skip the LLM entirely.
+            # The profile goes in so the message names the exercise the user
+            # actually uploaded and re-uses that exercise's own filming guidance:
+            # this text used to be squat-shaped for everything, so a push-up that
+            # failed to track was told we could not find a complete squat rep.
+            report = not_analyzed_report(status, spec.profile)
             payload = {"status": status, "evaluation": None,
                        "voice_transcript": "", "report": report.to_dict()}
         else:
@@ -242,9 +266,19 @@ def run_pipeline(input_path, output_root, exercise: str = "squat",
                     voice_text = whisper_wrapper.transcribe(
                         options.voice_audio_path, model_size=options.whisper_model,
                     )
-                except RuntimeError as e:
+                except RuntimeError:
+                    # The exception text here is the provider's own error body,
+                    # which the API returns in warnings[] and the PWA renders
+                    # verbatim in a banner. An invalid key put "Groq transcription
+                    # error 401: {...}" on the user's screen. Keep the failure
+                    # visible — dropping it silently would be worse — but say it in
+                    # the user's terms and leave the detail in the log.
+                    log.warning("voice transcription failed for job %s", job_id,
+                                exc_info=True)
                     summary.setdefault("warnings", []).append(
-                        f"voice transcription failed: {e}"
+                        "Your voice note couldn't be transcribed, so the coaching "
+                        "below doesn't take it into account. Everything else was "
+                        "analysed normally."
                     )
 
             evaluation = spec.evaluate(angles, reps, side, fps,

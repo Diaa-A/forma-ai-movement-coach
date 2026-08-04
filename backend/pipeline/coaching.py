@@ -15,18 +15,24 @@ Safety contract (mirrors what the system prompt enforces):
 from __future__ import annotations
 
 import json
+import logging
 import os
 import urllib.request
 import urllib.error
 from dataclasses import dataclass, asdict
 from typing import List, Optional
 
-from ..exercises.squat_cues import Evaluation, CueHit
+# via mechanics, not squat_cues -- squat_cues only re-exports these, and importing
+# them from there put an exercise name in pipeline/, which is the one thing the
+# shared-movement refactor (Decision 27) was meant to leave behind.
+from ..exercises.mechanics import Evaluation, CueHit
 
 
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 DEFAULT_MODEL = "llama-3.3-70b-versatile"
 REQUEST_TIMEOUT = 30.0
+
+log = logging.getLogger("coach.coaching")
 
 
 @dataclass
@@ -219,23 +225,40 @@ def _dry_run_report(evaluation: Evaluation) -> CoachingReport:
 # Public entry
 # ---------------------------------------------------------------------------
 
-def not_analyzed_report(status: str) -> CoachingReport:
+def not_analyzed_report(status: str, profile=None) -> CoachingReport:
     """Honest report when the clip can't be analysed — used INSTEAD of coaching
-    so 'no rep detected' is never mistaken for 'good form'. No LLM call is made."""
+    so 'no rep detected' is never mistaken for 'good form'. No LLM call is made.
+
+    `profile` is the exercise's ExerciseProfile. It is optional so the older
+    call signature still works, but callers should pass it: without it this
+    said "I couldn't detect a complete squat rep" whatever the user uploaded,
+    and told a push-up user to film at hip height. The re-filming advice is the
+    profile's own `filming_guide` rather than a second copy of it, for the same
+    reason GET /exercises serves that string instead of the frontend holding one
+    — two copies drift, and the one quoted back to the user stops matching the
+    one they read before recording.
+    """
+    name = profile.name if profile is not None else "exercise"
     if status == "no_reps":
-        primary = ("I couldn't detect a complete squat rep in this clip, so "
+        primary = (f"I couldn't detect a complete {name} rep in this clip, so "
                    "there's nothing to score yet.")
     else:  # low_detection
         primary = ("Body tracking was too unreliable on this clip to give "
                    "trustworthy feedback.")
+
+    cues = []
+    if profile is not None:
+        cues.append(profile.filming_guide)
+    else:
+        cues.append("Film side-on at about hip height, with your whole body "
+                    "in the frame.")
+    cues.append("Wear fitted clothing and use a plain, uncluttered background.")
+
     return CoachingReport(
         what_went_well=[],
         primary_issue=primary,
         secondary_issues=[],
-        corrective_cues=[
-            "Film side-on at about hip height, with your whole body in the frame.",
-            "Wear fitted clothing and use a plain, uncluttered background.",
-        ],
+        corrective_cues=cues,
         next_session_focus="Re-record with the framing above and upload again.",
         source="not_analyzed",
         model=None,
@@ -251,9 +274,10 @@ def generate_coaching_report(evaluation: Evaluation,
     Falls back to a deterministic dry-run report when:
         - force_dry_run is True
         - GROQ_API_KEY is not set in the environment
-        - the LLM call fails for any reason (errors are caught and the dry-run
-          report is returned with a note in `corrective_cues` so the failure
-          isn't silent)
+        - the LLM call fails for any reason. The failure is logged and shows up
+          in `source` as "dry_run_fallback", which the UI turns into a sentence
+          telling the user they are reading the system's own wording — so it is
+          not silent, and no exception text reaches them.
     """
     # the camera-view tip is deterministic — never left to the LLM
     tip = getattr(evaluation, "view_guidance", None)
@@ -278,12 +302,21 @@ def generate_coaching_report(evaluation: Evaluation,
             model=model,
             filming_tip=tip,
         )
-    except Exception as e:
-        # never let a coaching failure break the analysis pipeline
+    except Exception:
+        # Never let a coaching failure break the analysis pipeline. The failure
+        # still has to be visible, but it was being made visible in the worst
+        # available place: the exception text went into corrective_cues, which is
+        # rendered as coaching advice AND written into coaching.json, which is
+        # served publicly under /results/<job>/. With a bad key that put a raw
+        # Groq error body — provider internals, and whatever the provider chose to
+        # echo back — in front of the user and on a public URL.
+        #
+        # `source` already carries the fact of the fallback, and the UI turns it
+        # into a plain sentence saying the wording is the system's own. That is the
+        # honest signal; this one was only ever noise on top of it.
+        log.warning("coaching LLM call failed, falling back to cue wording",
+                    exc_info=True)
         fallback = _dry_run_report(evaluation)
-        fallback.corrective_cues.insert(
-            0, f"(LLM call failed: {e}. Falling back to dry-run wording.)"
-        )
         fallback.source = "dry_run_fallback"
         fallback.filming_tip = tip
         return fallback
