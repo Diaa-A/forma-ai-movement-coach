@@ -1,13 +1,16 @@
 import { useRef, useState } from 'react'
-import type { Exercise } from '../types'
+import type { Exercise, Limits } from '../types'
 import VoiceNote from '../components/VoiceNote'
 import {
-  CHUNKY_UPLOAD_BYTES, checkDuration, checkVideoFile,
+  CHUNKY_UPLOAD_BYTES, FALLBACK, checkDuration, checkVideoFile,
   formatBytes, formatSeconds, readDuration,
 } from '../validation'
 
 interface Props {
   exercise: Exercise
+  /** what the server will accept, from GET /exercises. Defaulted so this screen
+   *  still works if the catalogue never arrived. */
+  limits?: Limits
   online: boolean
   onSubmit: (video: File, voiceNote: File | null, voiceText: string) => void
   onBack: () => void
@@ -31,7 +34,8 @@ interface Picked {
  * Everything is validated here before a byte leaves the device, because finding
  * out a clip was too long after three minutes of uploading on 4G is miserable.
  */
-export default function Capture({ exercise, online, onSubmit, onBack }: Props) {
+export default function Capture({ exercise, limits = FALLBACK, online,
+                                  onSubmit, onBack }: Props) {
   const [picked, setPicked] = useState<Picked | null>(null)
   const [rejection, setRejection] = useState<string | null>(null)
   const [voiceNote, setVoiceNote] = useState<File | null>(null)
@@ -45,7 +49,7 @@ export default function Capture({ exercise, online, onSubmit, onBack }: Props) {
     if (!file) return
     setRejection(null)
 
-    const basic = checkVideoFile(file)
+    const basic = checkVideoFile(file, limits)
     if (!basic.ok) {
       setPicked(null)
       setRejection(basic.message ?? 'That file cannot be used.')
@@ -56,7 +60,7 @@ export default function Capture({ exercise, online, onSubmit, onBack }: Props) {
     const duration = await readDuration(file)
     setChecking(false)
 
-    const timing = checkDuration(duration)
+    const timing = checkDuration(duration, limits)
     if (!timing.ok) {
       setPicked(null)
       setRejection(timing.message ?? 'That clip is the wrong length.')
@@ -145,6 +149,7 @@ export default function Capture({ exercise, online, onSubmit, onBack }: Props) {
       <VoiceNote
         audio={voiceNote}
         text={voiceText}
+        limits={limits}
         onAudio={setVoiceNote}
         onText={setVoiceText}
       />

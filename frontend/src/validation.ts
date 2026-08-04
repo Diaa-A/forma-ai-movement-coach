@@ -4,24 +4,29 @@
 // so the user finds out in a second rather than after a three-minute upload on
 // mobile data, and so the message can name the value that was wrong.
 //
-// Kept in step with backend/api/routes.py by hand. If the allowlists there change,
-// change them here.
+// The numbers come from GET /exercises. They used to be written out here by hand
+// with a note saying to keep them in step, and they had already fallen out of
+// step: the comment claimed the server enforced a 3-45 second gate, and the
+// server had no duration check at all. FALLBACK below is what these checks use
+// before the catalogue arrives, or if it never does — the app has to stay usable
+// offline, and a stale-but-close limit is better than no check.
 
-export const MAX_VIDEO_BYTES = 100 * 1024 * 1024
-export const MAX_AUDIO_BYTES = 10 * 1024 * 1024
+import type { Limits } from './types'
 
-export const ALLOWED_VIDEO_SUFFIXES = ['.mp4', '.mov', '.webm', '.m4v']
-export const ALLOWED_AUDIO_SUFFIXES = ['.wav', '.mp3', '.m4a', '.webm', '.ogg']
-
-// The spec asks for 5-30 s. The server gate is looser (3-45 s) so a slightly
-// long clip isn't thrown away, and we warn rather than block inside that margin.
-export const IDEAL_MIN_SECONDS = 5
-export const IDEAL_MAX_SECONDS = 30
-export const HARD_MIN_SECONDS = 3
-export const HARD_MAX_SECONDS = 45
+export const FALLBACK: Limits = {
+  max_video_bytes: 100 * 1024 * 1024,
+  max_audio_bytes: 10 * 1024 * 1024,
+  video_suffixes: ['.mp4', '.mov', '.webm', '.m4v'],
+  audio_suffixes: ['.m4a', '.mp3', '.mp4', '.ogg', '.wav', '.webm'],
+  min_seconds: 3,
+  max_seconds: 45,
+  ideal_min_seconds: 5,
+  ideal_max_seconds: 30,
+}
 
 /** Roughly where an upload stops being a few seconds and starts being a wait,
- *  on a connection the user is paying for by the megabyte. */
+ *  on a connection the user is paying for by the megabyte. Ours, not the
+ *  server's — it is about the user's patience, not about what /analyze accepts. */
 export const CHUNKY_UPLOAD_BYTES = 25 * 1024 * 1024
 
 export interface Check {
@@ -49,20 +54,20 @@ export function formatSeconds(s: number): string {
   return `${m}m ${Math.round(s - m * 60)}s`
 }
 
-export function checkVideoFile(file: File): Check {
+export function checkVideoFile(file: File, limits: Limits = FALLBACK): Check {
   const suffix = suffixOf(file.name)
-  if (!ALLOWED_VIDEO_SUFFIXES.includes(suffix)) {
+  if (!limits.video_suffixes.includes(suffix)) {
     return {
       ok: false,
       message: suffix
-        ? `${suffix} files aren't supported. Try one of ${ALLOWED_VIDEO_SUFFIXES.join(', ')}.`
+        ? `${suffix} files aren't supported. Try one of ${limits.video_suffixes.join(', ')}.`
         : `That file has no extension, so we can't tell what format it is.`,
     }
   }
-  if (file.size > MAX_VIDEO_BYTES) {
+  if (file.size > limits.max_video_bytes) {
     return {
       ok: false,
-      message: `That clip is ${formatBytes(file.size)} and the limit is ${formatBytes(MAX_VIDEO_BYTES)}. A shorter clip, or a lower recording quality, will get you under it.`,
+      message: `That clip is ${formatBytes(file.size)} and the limit is ${formatBytes(limits.max_video_bytes)}. A shorter clip, or a lower recording quality, will get you under it.`,
     }
   }
   if (file.size === 0) {
@@ -71,34 +76,36 @@ export function checkVideoFile(file: File): Check {
   return OK
 }
 
-export function checkAudioFile(file: File): Check {
+export function checkAudioFile(file: File, limits: Limits = FALLBACK): Check {
   const suffix = suffixOf(file.name)
-  if (!ALLOWED_AUDIO_SUFFIXES.includes(suffix)) {
+  if (!limits.audio_suffixes.includes(suffix)) {
     return { ok: false, message: `${suffix || 'That'} audio isn't a format we can read.` }
   }
-  if (file.size > MAX_AUDIO_BYTES) {
-    return { ok: false, message: `That voice note is ${formatBytes(file.size)}; keep it under ${formatBytes(MAX_AUDIO_BYTES)}.` }
+  if (file.size > limits.max_audio_bytes) {
+    return { ok: false, message: `That voice note is ${formatBytes(file.size)}; keep it under ${formatBytes(limits.max_audio_bytes)}.` }
   }
   return OK
 }
 
-export function checkDuration(seconds: number): Check {
+export function checkDuration(seconds: number, limits: Limits = FALLBACK): Check {
+  const { min_seconds, max_seconds, ideal_min_seconds, ideal_max_seconds } = limits
+
   if (!isFinite(seconds) || seconds <= 0) {
     // Some containers don't report duration until they've buffered. Not the
-    // user's problem, and the server checks anyway — let it through.
+    // user's problem, and the server checks too — let it through.
     return OK
   }
-  if (seconds < HARD_MIN_SECONDS) {
-    return { ok: false, message: `That clip is ${formatSeconds(seconds)} — too short to find a full rep in. Aim for ${IDEAL_MIN_SECONDS}-${IDEAL_MAX_SECONDS} seconds.` }
+  if (seconds < min_seconds) {
+    return { ok: false, message: `That clip is ${formatSeconds(seconds)} — too short to find a full rep in. Aim for ${ideal_min_seconds}-${ideal_max_seconds} seconds.` }
   }
-  if (seconds > HARD_MAX_SECONDS) {
-    return { ok: false, message: `That clip is ${formatSeconds(seconds)} and the limit is ${HARD_MAX_SECONDS} seconds. Trim it to a few good reps.` }
+  if (seconds > max_seconds) {
+    return { ok: false, message: `That clip is ${formatSeconds(seconds)} and the limit is ${max_seconds} seconds. Trim it to a few good reps.` }
   }
-  if (seconds < IDEAL_MIN_SECONDS || seconds > IDEAL_MAX_SECONDS) {
+  if (seconds < ideal_min_seconds || seconds > ideal_max_seconds) {
     return {
       ok: true,
       warning: true,
-      message: `That's ${formatSeconds(seconds)}. It'll work, but ${IDEAL_MIN_SECONDS}-${IDEAL_MAX_SECONDS} seconds of a few clean reps gives the best read.`,
+      message: `That's ${formatSeconds(seconds)}. It'll work, but ${ideal_min_seconds}-${ideal_max_seconds} seconds of a few clean reps gives the best read.`,
     }
   }
   return OK

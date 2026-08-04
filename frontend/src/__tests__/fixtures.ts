@@ -29,7 +29,10 @@ const notAnalysedReport: CoachingReport = {
     "I couldn't detect a complete squat rep in this clip, so there's nothing to score yet.",
   secondary_issues: [],
   corrective_cues: [
-    'Film side-on at about hip height, with your whole body in the frame.',
+    // the profile's own filming_guide, not a second copy of the wording — the
+    // backend takes this straight from the exercise now, so a push-up that fails
+    // to track no longer gets squat advice
+    'Film side-on at about hip height with your whole body in frame. For a left/right symmetry check, film a second set from the front.',
     'Wear fitted clothing and use a plain, uncluttered background.',
   ],
   next_session_focus: 'Re-record with the framing above and upload again.',
@@ -81,9 +84,14 @@ export const lowDetectionResult: AnalyzeResponse = {
   },
 }
 
+// The warning used to be f"voice transcription failed: {e}", which meant the
+// provider's own error body was rendered here verbatim. It says this now.
 export const okWithWarning: AnalyzeResponse = {
   ...okResult,
-  warnings: ['voice transcription failed: no transcription backend available'],
+  warnings: [
+    "Your voice note couldn't be transcribed, so the coaching below doesn't take " +
+    'it into account. Everything else was analysed normally.',
+  ],
 }
 
 export const fallbackReportResult: AnalyzeResponse = {

@@ -99,7 +99,15 @@ describe('warnings', () => {
     // a voice note that failed to transcribe on an otherwise fine run is exactly
     // where silently dropping the warning would be dishonest
     render(<Results result={okWithWarning} onRestart={noop} />)
-    expect(screen.getByText(/voice transcription failed/i)).toBeInTheDocument()
+    expect(screen.getByText(/voice note couldn't be transcribed/i)).toBeInTheDocument()
+  })
+
+  it('say what happened without quoting the provider at the user', () => {
+    // this carried the raw exception, so an invalid key put "Groq transcription
+    // error 401: {...}" in the banner
+    render(<Results result={okWithWarning} onRestart={noop} />)
+    const banner = document.querySelector('.banner-warn')
+    expect(banner?.textContent).not.toMatch(/401|Groq|Traceback/)
   })
 
   it('produce no banner at all when there are none', () => {

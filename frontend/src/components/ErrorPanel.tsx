@@ -14,6 +14,11 @@ interface Props {
  * For a 4xx the message is the server's own — those are written to be read by a
  * person. For a 5xx it is ours, because whatever the server said is an internal
  * detail and shouldn't reach the user.
+ *
+ * The exception to that is the reference, which the server sends in a header
+ * rather than the body. It is the one piece of a 5xx worth showing: during a
+ * testing session it turns "it broke" into something that points straight at the
+ * traceback, and it costs the user nothing to read it back.
  */
 export default function ErrorPanel({ error, onRetry, onRestart }: Props) {
   const { heading, advice } = copyFor(error)
@@ -26,6 +31,13 @@ export default function ErrorPanel({ error, onRetry, onRestart }: Props) {
       </div>
 
       {advice && <p className="muted small">{advice}</p>}
+
+      {error.reference && (
+        <p className="muted small">
+          If you report this, quote <code>{error.reference}</code> — it points at
+          what went wrong in our logs.
+        </p>
+      )}
 
       <button className="btn btn-primary" onClick={onRetry}>Try again</button>
       <button className="btn btn-quiet" onClick={onRestart}>Start over</button>

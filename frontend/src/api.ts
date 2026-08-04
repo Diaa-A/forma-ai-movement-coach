@@ -10,7 +10,7 @@
 // and not having one means there's no way to accidentally ship a hardcoded
 // localhost into a deployed build.
 
-import type { AnalyzeResponse, ApiError, Exercise } from './types'
+import type { AnalyzeResponse, ApiError, Catalog } from './types'
 
 /** Anything past this and something is wrong — the reference clip takes ~12 s and
  *  a 50 MB upload on a bad connection is still bounded by the size cap. Generous
@@ -18,11 +18,18 @@ import type { AnalyzeResponse, ApiError, Exercise } from './types'
  *  waiting. */
 const REQUEST_TIMEOUT_MS = 6 * 60 * 1000
 
-export async function fetchExercises(): Promise<Exercise[]> {
+/**
+ * Everything the app needs before the user picks anything: what can be analysed,
+ * how to film each one, and what /analyze will accept.
+ *
+ * The limits come back on the same call rather than from a second endpoint —
+ * this is already the "what can this thing do" request, it is already made once
+ * on load, and the service worker already refuses to cache it.
+ */
+export async function fetchCatalog(): Promise<Catalog> {
   const res = await fetch('/exercises')
   if (!res.ok) throw new Error(`GET /exercises returned ${res.status}`)
-  const body = await res.json()
-  return body.exercises
+  return await res.json()
 }
 
 export interface AnalyzeArgs {
@@ -106,10 +113,14 @@ function httpError(xhr: XMLHttpRequest): ApiError {
   if (xhr.status >= 400 && xhr.status < 500) {
     return { kind: 'rejected', status: xhr.status, message: detailOf(xhr) }
   }
+  // The reference travels in a header rather than the body, which is what lets
+  // the rule above stay absolute: we still read nothing a 5xx says about itself,
+  // and the user still gets something they can quote.
   return {
     kind: 'server',
     status: xhr.status,
     message: 'Something went wrong on our side while analysing that clip. Trying again often works.',
+    reference: xhr.getResponseHeader('X-Error-Reference') ?? undefined,
   }
 }
 

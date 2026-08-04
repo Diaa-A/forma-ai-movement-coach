@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { checkAudioFile } from '../validation'
+import type { Limits } from '../types'
+import { FALLBACK, checkAudioFile } from '../validation'
 
 interface Props {
   audio: File | null
   text: string
+  limits?: Limits
   onAudio: (file: File | null) => void
   onText: (text: string) => void
 }
@@ -17,11 +19,14 @@ interface Props {
  * throws when tapped, we detect it and offer the text box instead.
  *
  * Container note: Safari's MediaRecorder produces audio/mp4 and Chrome's produces
- * audio/webm. The backend allowlist has .webm and .m4a but not .mp4, so the blob
- * gets named from the recorder's own mimeType and audio/mp4 is written as .m4a —
- * same container, and it's on the list.
+ * audio/webm, so the blob is named from the recorder's own mimeType rather than
+ * assumed. audio/mp4 is written as .m4a because that is the conventional
+ * extension for an audio-only MP4. That started life as a workaround for .mp4
+ * being missing from the server allowlist; the allowlist takes .mp4 now, and the
+ * naming stays because it was the right name anyway.
  */
-export default function VoiceNote({ audio, text, onAudio, onText }: Props) {
+export default function VoiceNote({ audio, text, limits = FALLBACK,
+                                    onAudio, onText }: Props) {
   const [recording, setRecording] = useState(false)
   const [elapsed, setElapsed] = useState(0)
   const [error, setError] = useState<string | null>(null)
@@ -65,7 +70,7 @@ export default function VoiceNote({ audio, text, onAudio, onText }: Props) {
         const blob = new Blob(chunksRef.current, { type })
         const file = new File([blob], `voice${extensionFor(type)}`, { type })
 
-        const check = checkAudioFile(file)
+        const check = checkAudioFile(file, limits)
         if (!check.ok) {
           setError(check.message ?? 'That recording could not be used.')
           return

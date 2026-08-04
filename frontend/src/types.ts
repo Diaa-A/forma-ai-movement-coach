@@ -18,6 +18,31 @@ export interface Exercise {
   assesses: Record<string, string[]>
 }
 
+/** What /analyze will accept, served by the API rather than kept here.
+ *
+ *  These numbers used to live in validation.ts as a hand-maintained second copy,
+ *  with a comment saying so — and it had already drifted: it documented a 3-45
+ *  second server gate that the server did not actually have. Same reasoning as
+ *  filming_guide: the copy the user is checked against has to be the copy the
+ *  server enforces. */
+export interface Limits {
+  max_video_bytes: number
+  max_audio_bytes: number
+  video_suffixes: string[]
+  audio_suffixes: string[]
+  /** the band the server refuses outside of */
+  min_seconds: number
+  max_seconds: number
+  /** the band that gives a good read — worth a warning, not a refusal */
+  ideal_min_seconds: number
+  ideal_max_seconds: number
+}
+
+export interface Catalog {
+  exercises: Exercise[]
+  limits: Limits
+}
+
 export interface KeyFrame {
   url: string
   label: string
@@ -73,4 +98,7 @@ export interface ApiError {
   kind: 'network' | 'timeout' | 'rejected' | 'server' | 'aborted'
   message: string
   status?: number
+  /** short code the server logged the traceback under, on a 5xx. Shown so a
+   *  tester can quote it instead of describing what they were doing. */
+  reference?: string
 }

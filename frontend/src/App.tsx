@@ -1,6 +1,7 @@
 import { useEffect, useReducer, useRef } from 'react'
-import { analyze, fetchExercises } from './api'
-import type { AnalyzeResponse, ApiError, Exercise } from './types'
+import { analyze, fetchCatalog } from './api'
+import type { AnalyzeResponse, ApiError, Exercise, Limits } from './types'
+import { FALLBACK } from './validation'
 import { useOnline } from './useOnline'
 import Disclaimer from './components/Disclaimer'
 import ErrorPanel from './components/ErrorPanel'
@@ -28,6 +29,7 @@ interface Submission {
 interface State {
   screen: Screen
   exercises: Exercise[]
+  limits: Limits
   exercisesFailed: boolean
   chosen: Exercise | null
   submission: Submission | null
@@ -40,7 +42,7 @@ interface State {
 }
 
 type Action =
-  | { type: 'exercises-loaded'; exercises: Exercise[] }
+  | { type: 'exercises-loaded'; exercises: Exercise[]; limits: Limits }
   | { type: 'exercises-failed' }
   | { type: 'pick'; exercise: Exercise }
   | { type: 'to'; screen: Screen }
@@ -54,6 +56,9 @@ type Action =
 const initial: State = {
   screen: 'select',
   exercises: [],
+  // the server's limits replace these as soon as /exercises answers; until then
+  // the checks still run, so a file is never sent off unchecked
+  limits: FALLBACK,
   exercisesFailed: false,
   chosen: null,
   submission: null,
@@ -82,8 +87,10 @@ const OFFLINE_FALLBACK: Exercise[] = [
 function reducer(state: State, action: Action): State {
   switch (action.type) {
     case 'exercises-loaded':
-      return { ...state, exercises: action.exercises, exercisesFailed: false }
+      return { ...state, exercises: action.exercises, limits: action.limits,
+               exercisesFailed: false }
     case 'exercises-failed':
+      // keep whatever limits we have; FALLBACK is already the initial value
       return { ...state, exercises: OFFLINE_FALLBACK, exercisesFailed: true }
     case 'pick':
       return { ...state, chosen: action.exercise, screen: 'guide' }
@@ -115,8 +122,9 @@ function reducer(state: State, action: Action): State {
       }
       return { ...state, error: action.error, screen: 'error' }
     case 'restart':
-      // keep the loaded exercise list, drop everything about the last run
-      return { ...initial, exercises: state.exercises, exercisesFailed: state.exercisesFailed }
+      // keep the loaded catalogue, drop everything about the last run
+      return { ...initial, exercises: state.exercises, limits: state.limits,
+               exercisesFailed: state.exercisesFailed }
   }
 }
 
@@ -130,9 +138,9 @@ export default function App() {
   useEffect(() => {
     if (!online) return
     let cancelled = false
-    fetchExercises()
-      .then((exercises) => {
-        if (!cancelled) dispatch({ type: 'exercises-loaded', exercises })
+    fetchCatalog()
+      .then(({ exercises, limits }) => {
+        if (!cancelled) dispatch({ type: 'exercises-loaded', exercises, limits })
       })
       .catch(() => {
         if (!cancelled) dispatch({ type: 'exercises-failed' })
@@ -209,6 +217,7 @@ export default function App() {
       {state.screen === 'capture' && state.chosen && (
         <Capture
           exercise={state.chosen}
+          limits={state.limits}
           online={online}
           onSubmit={(video, voiceNote, voiceText) =>
             send({ video, voiceNote, voiceText })}
