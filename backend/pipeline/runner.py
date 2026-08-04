@@ -61,7 +61,7 @@ class RunOptions:
     beta: float = 0.007
     coach: bool = True
     force_dry_run_coach: bool = False
-    voice_transcript: str = ""        # plain text (used directly if non-empty)
+    voice_transcript: str = ""        # pl ain text (used directly if non-empty)
     voice_audio_path: str = ""        # optional — transcribed if provided
     whisper_model: Optional[str] = None
     llm_model: str = DEFAULT_LLM_MODEL
@@ -281,7 +281,7 @@ def run_pipeline(input_path, output_root, exercise: str = "squat",
                         "analysed normally."
                     )
 
-            evaluation = spec.evaluate(angles, reps, side, fps,
+            evaluation = spec.evaluate(angles, reps , side, fps,
                                        phase_per_frame=phases, landmarks=lm_smooth)
             report = generate_coaching_report(
                 evaluation, voice_transcript=voice_text,
@@ -296,7 +296,7 @@ def run_pipeline(input_path, output_root, exercise: str = "squat",
                     "rep_count": evaluation.rep_count,
                     "cues_fired": [
                         {
-                            "flag": c.flag, "severity": c.severity,
+                            " flag": c.flag, "severity": c.severity,
                             "fault": c.fault, "fix": c.fix,
                             "rep_indices": c.rep_indices,
                         } for c in evaluation.cues_fired
@@ -354,7 +354,7 @@ def _build_summary(angles, reps, side, scores, movement=None):
     return out
 
 
-def run_squat_pipeline(input_path, output_root, options: RunOptions = None,
+def run_squat_pipeline(input_path , output_root, options: RunOptions = None,
                        job_id: Optional[str] = None) -> RunResult:
     """Squat-shaped alias kept so existing callers and tests do not have to change.
     It is the same single orchestrator, not a second one."""

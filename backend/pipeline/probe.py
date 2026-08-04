@@ -1,44 +1,76 @@
-"""Read a clip's length without decoding it.
+"""Look at an uploaded file before handing it to the pipeline.
 
-There is a byte cap on uploads but no length check, so a ten-minute clip is
-accepted and then costs the pipeline ten minutes of pose inference before anyone
-finds out. This answers "how long is it" cheaply enough to ask before starting.
+Two questions, both answered from container metadata, both worth asking before
+spending twelve seconds a clip-minute on pose inference:
 
-The reading comes from container metadata rather than from counting frames, which
-makes it approximate. That is worth being explicit about, because this project has
-already been caught by an approximate OpenCV reading once: `CAP_PROP_POS_FRAMES`
-seeks landed up to four frames early, which mattered a lot when the requirement
-was "give me frame 44 exactly" (see render.read_frames_exact). It does not matter
-here. Being a few frames out on a 45-second limit changes nothing, and the
-question is a band rather than a value.
+  - Is there a picture in there at all? Not a rhetorical question. An audio-only
+    .mp4 is what you get by picking a voice memo out of a phone gallery by
+    mistake, and it used to travel all the way into `extract_landmarks`, fail
+    with "no frames decoded", and come back to the user as a 500. That is a bad
+    upload, not a server fault.
+  - How long is it? There is a byte cap but there was no length check, so a
+    ten-minute clip was accepted and then analysed in full.
 
-When the metadata is missing or nonsense the answer is None, and the caller is
-expected to let the clip through rather than refuse on a number it does not have.
-Refusing on an unreadable probe would reject valid files for a reason the user
-could do nothing about.
+Measured on the fixtures, which is what the checks below are built from:
+
+    squat.mp4 (real)          fps 30   frames 608   576x1024
+    notefortest.mp4 (audio)   fps 1    frames  -1   0x0
+    requirements.txt as .mp4  does not open as video       (also .mov/.webm/.m4v)
+    requirements.txt as .txt  fps 25   frames   5   640x400
+    README.md                 does not open at all
+
+So a zero frame size is the test. The last two rows are the same bytes: OpenCV
+picks its backend partly from the extension, and only the unrecognised one falls
+through to something that reports a nonsense 640x400. Uploads are always staged
+under one of the allowed video extensions, so that row is not a path a request
+can take — it is recorded because it is why the check reads frame size rather
+than trusting the file to be what it is named.
+
+Nothing decodes here, on purpose. An earlier version called `cap.read()` to
+confirm a frame actually came out, which is the stronger test, and on
+requirements.txt that call **hangs indefinitely** rather than failing. A probe
+that can hang is worse than the problem it was added for.
+
+Since the pipeline decodes with that same call, a file that got past this check
+while not really being video could still hang a request. Nothing in the fixtures
+manages it, but the check is metadata and metadata can lie. The bound for that is
+a request timeout at the serving layer, which belongs to deployment (WP-03).
+
+`seconds` is None when the container will not say. The caller lets those through
+rather than refusing on a number it does not have; refusing would reject valid
+files for a reason the user cannot act on, and the byte cap bounds the bad case.
 """
 from __future__ import annotations
+
+from dataclasses import dataclass
 
 import cv2
 
 
-def duration_seconds(path) -> float | None:
-    """Clip length in seconds, or None if the container will not say.
+@dataclass(frozen=True)
+class ClipProbe:
+    readable: bool          # there is a picture in it, whatever else is true
+    seconds: float | None   # length from metadata, None if unknown
 
-    Opens the file and reads two properties; no frames are decoded, so this costs
-    microseconds against a pipeline that costs seconds.
-    """
+
+def probe_clip(path) -> ClipProbe:
+    """Open the file once and read what it says about itself. Decodes nothing."""
     cap = cv2.VideoCapture(str(path))
     if not cap.isOpened():
-        return None
+        return ClipProbe(readable=False, seconds=None)
+
     try:
         fps = cap.get(cv2.CAP_PROP_FPS)
         frames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+        width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
+        height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
     finally:
         cap.release()
 
-    # A container that reports zero fps or a negative frame count is telling us it
-    # does not know, not that the clip is empty.
-    if not fps or fps <= 0 or not frames or frames <= 0:
-        return None
-    return float(frames) / float(fps)
+    if not (width > 0 and height > 0 and frames > 0):
+        return ClipProbe(readable=False, seconds=None)
+
+    # fps of zero is the container declining to say, not a still image
+    if not fps or fps <= 0:
+        return ClipProbe(readable=True, seconds=None)
+    return ClipProbe(readable=True, seconds=float(frames) / float(fps))

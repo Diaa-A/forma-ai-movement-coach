@@ -18,6 +18,7 @@ from fastapi.testclient import TestClient
 from backend import main
 from backend.api import routes
 from backend.main import app
+from backend.pipeline.probe import ClipProbe
 
 
 client = TestClient(app)
@@ -35,8 +36,16 @@ def staging(tmp_path, monkeypatch):
 
 @pytest.fixture
 def readable_duration(monkeypatch):
-    """A clip length inside the band, for tests that are about something else."""
-    monkeypatch.setattr(routes, "duration_seconds", lambda path: 12.0)
+    """A normal 12-second clip, for tests that are about something else."""
+    monkeypatch.setattr(routes, "probe_clip",
+                        lambda path: ClipProbe(readable=True, seconds=12.0))
+
+
+def probes_as(monkeypatch, **kwargs):
+    """Make the probe report whatever a test needs it to."""
+    kwargs.setdefault("readable", True)
+    kwargs.setdefault("seconds", 12.0)
+    monkeypatch.setattr(routes, "probe_clip", lambda path: ClipProbe(**kwargs))
 
 
 @pytest.fixture
@@ -140,7 +149,7 @@ def test_oversize_voice_note_says_which_file_it_means(readable_duration, monkeyp
 # ---------------------------------------------------------------------------
 
 def test_over_long_clip_is_refused_before_the_pipeline_runs(monkeypatch, captured_runs):
-    monkeypatch.setattr(routes, "duration_seconds", lambda path: 300.0)
+    probes_as(monkeypatch, seconds=300.0)
     r = post()
     assert r.status_code == 400
     assert "45" in r.json()["detail"]
@@ -148,7 +157,7 @@ def test_over_long_clip_is_refused_before_the_pipeline_runs(monkeypatch, capture
 
 
 def test_too_short_clip_is_refused_with_the_length_that_would_work(monkeypatch):
-    monkeypatch.setattr(routes, "duration_seconds", lambda path: 1.2)
+    probes_as(monkeypatch, seconds=1.2)
     r = post()
     assert r.status_code == 400
     detail = r.json()["detail"]
@@ -158,19 +167,33 @@ def test_too_short_clip_is_refused_with_the_length_that_would_work(monkeypatch):
 def test_a_rejected_clip_is_removed_rather_than_left_on_disk(monkeypatch, staging):
     """Nothing has been analysed at this point, and until WP-07 exists nothing
     else would ever delete it."""
-    monkeypatch.setattr(routes, "duration_seconds", lambda path: 300.0)
+    probes_as(monkeypatch, seconds=300.0)
     post()
     staged = list(staging.rglob("input.*")) if staging.exists() else []
     assert staged == []
 
 
-def test_an_unreadable_duration_lets_the_clip_through(monkeypatch, captured_runs):
+def test_an_unknown_duration_lets_the_clip_through(monkeypatch, captured_runs):
     """Some containers will not report a duration. Refusing on a number we do not
     have would reject valid files for a reason the user cannot act on, and the
     byte cap already bounds the bad case."""
-    monkeypatch.setattr(routes, "duration_seconds", lambda path: None)
+    probes_as(monkeypatch, seconds=None)
     post()
     assert captured_runs, "an unknown duration was treated as a rejection"
+
+
+def test_a_file_with_no_video_in_it_is_a_bad_request_not_a_crash(monkeypatch,
+                                                                 captured_runs):
+    """An audio-only .mp4 is what you get by picking a voice memo out of the
+    gallery. It reports no duration, so it passed the length check, and then died
+    in extract_landmarks with "no frames decoded" — which reached the user as a
+    500 for something they did, not something we did.
+    """
+    probes_as(monkeypatch, readable=False, seconds=None)
+    r = post()
+    assert r.status_code == 400
+    assert "voice memo" in r.json()["detail"]
+    assert not captured_runs
 
 
 # ---------------------------------------------------------------------------

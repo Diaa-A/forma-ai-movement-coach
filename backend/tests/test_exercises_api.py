@@ -13,6 +13,7 @@ from backend.api.routes import ALLOWED_EXERCISES
 from backend.exercises.registry import PROFILES
 from backend.exercises.squat_cues import SQUAT_PROFILE
 from backend.exercises.base import SAGITTAL, FRONTAL
+from backend.pipeline.probe import ClipProbe
 
 
 client = TestClient(app)
@@ -79,9 +80,13 @@ def test_analyze_runs_the_exercise_that_was_asked_for(monkeypatch):
     def fake_run(video_path, output_root, exercise="squat", options=None, job_id=None):
         seen["exercise"] = exercise
         seen["job_id"] = job_id
-        raise FileNotFoundError("stop here - we only care which exercise was requested")
+        raise RuntimeError("stop here - we only care which exercise was requested")
 
     monkeypatch.setattr("backend.api.routes.run_pipeline", fake_run)
+    # the upload has to survive the readability and length checks to reach the
+    # pipeline at all, and these bytes are not a video
+    monkeypatch.setattr("backend.api.routes.probe_clip",
+                        lambda path: ClipProbe(readable=True, seconds=12.0))
 
     for requested in ("pushup", "squat"):
         seen.clear()

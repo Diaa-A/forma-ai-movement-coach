@@ -17,7 +17,7 @@ from typing import Optional
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
-from ..pipeline.probe import duration_seconds
+from ..pipeline.probe import probe_clip
 from ..pipeline.runner import run_pipeline, new_job_id, RunOptions, RunResult
 from ..exercises.registry import PROFILES, exercise_ids
 from .schemas import (AnalyzeResponse, KeyFrame, RepStat, CoachingReportOut,
@@ -185,10 +185,20 @@ def analyze(
     video_path = _save_upload(video, upload_dir / f"input{suffix}",
                               MAX_VIDEO_BYTES, "clip")
 
-    # Length is only knowable once the file is here. Checked before the pipeline
-    # starts, because the alternative is spending twelve seconds a clip-minute
-    # discovering that somebody uploaded a whole training session.
-    seconds = duration_seconds(video_path)
+    # Neither of these is knowable until the file is here, and both are cheaper
+    # than finding out inside the pipeline.
+    clip = probe_clip(video_path)
+    if not clip.readable:
+        # The extension said .mp4 and there is no video behind it. This used to
+        # reach extract_landmarks, fail with "no frames decoded", and come back as
+        # a 500 — a bad upload reported as our fault.
+        _discard(upload_dir)
+        raise HTTPException(
+            400, "We couldn't read any video in that file. If you picked it from "
+                 "your gallery, check it's the clip itself and not a photo or a "
+                 "voice memo.")
+
+    seconds = clip.seconds
     if seconds is not None and not (MIN_CLIP_SECONDS <= seconds <= MAX_CLIP_SECONDS):
         _discard(upload_dir)
         if seconds < MIN_CLIP_SECONDS:
