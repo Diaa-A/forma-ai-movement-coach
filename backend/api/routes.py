@@ -222,9 +222,12 @@ def analyze(
         # right except the measurements.
         result = run_pipeline(video_path, OUTPUT_ROOT, exercise_type,
                               options=opts, job_id=job_id)
-    except FileNotFoundError as e:
-        raise HTTPException(400, str(e))
     except Exception:
+        # FileNotFoundError used to be caught separately and returned as a 400
+        # carrying str(e). Neither case that raises it is the caller's fault: the
+        # input video is missing only if our own staging failed, and the other
+        # source is a missing pose model, whose message is a server path plus the
+        # curl command to fix it. Both are ours, so both go through here.
         # Whatever went wrong here is ours, and the detail is ours too — it used
         # to be interpolated straight into the response, so a stack of internal
         # paths and module names went to whoever sent the request. The reference
