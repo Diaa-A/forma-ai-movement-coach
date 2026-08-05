@@ -70,10 +70,21 @@ IDEAL_MAX_SECONDS = 30.0
 # How many analyses may run at once. Everything else -- /health, /exercises, the
 # static files -- is unaffected.
 #
-# This is a memory bound, and it is set from a measured number rather than a
-# guess. One analysis peaks at 239 MB on the 576x1024 reference clip and 353 MB
-# on a 1080p phone clip; a 4K upload is higher again. The container has far less
-# headroom than that times six.
+# This is a memory bound, and it is set from measured numbers rather than a
+# guess. Peak resident memory for one analysis, against a container limit of
+# 954 MB (Railway, read from /sys/fs/cgroup/memory.max):
+#
+#     576x1024  0.6 MP   238 MB      the reference clip
+#     1080x1920 2.1 MP   353 MB      a phone clip
+#     2160x3840 8.3 MP   774 MB      4K, which is what an iPhone films by default
+#
+# So ONE 4K analysis leaves about 180 MB of headroom and two do not fit at all.
+# The default is 1 for that reason: an upload refused with a 503 costs one person
+# a retry, whereas an OOM kills the container and takes every request in flight
+# with it, including other people's.
+#
+# Raise it only if the memory limit goes up or inference stops running at full
+# resolution -- both are in the deployment notes.
 #
 # Six is what it was, expressed as uvicorn's --limit-concurrency, and that was
 # wrong twice over. The number was invented rather than measured, and the flag
@@ -85,7 +96,7 @@ IDEAL_MAX_SECONDS = 30.0
 # Cancelling closes the connection but does not stop the handler, so each retry
 # ADDED an analysis instead of replacing one, and the third one took the
 # container past its limit. The log said "Killed".
-MAX_CONCURRENT_ANALYSES = int(os.environ.get("MAX_CONCURRENT_ANALYSES", "2"))
+MAX_CONCURRENT_ANALYSES = int(os.environ.get("MAX_CONCURRENT_ANALYSES", "1"))
 _analysis_slots = threading.Semaphore(MAX_CONCURRENT_ANALYSES)
 
 
