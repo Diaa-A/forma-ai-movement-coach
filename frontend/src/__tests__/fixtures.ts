@@ -32,7 +32,7 @@ const notAnalysedReport: CoachingReport = {
     // the profile's own filming_guide, not a second copy of the wording — the
     // backend takes this straight from the exercise now, so a push-up that fails
     // to track no longer gets squat advice
-    'Film side-on at about hip height with your whole body in frame. For a left/right symmetry check, film a second set from the front.',
+    "Film side-on at about hip height with your whole body in frame. 1080p is plenty — filming in 4K makes the upload slower and doesn't improve the analysis. For a left/right symmetry check, film a second set from the front.",
     'Wear fitted clothing and use a plain, uncluttered background.',
   ],
   next_session_focus: 'Re-record with the framing above and upload again.',

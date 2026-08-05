@@ -118,9 +118,17 @@ SQUAT_CUES: Dict[str, dict] = {
 SQUAT_PROFILE = ExerciseProfile(
     name="squat",
     view_label="side-on",
+    # The resolution line is measured, not a guess. The same clip analysed at
+    # 576x1024, 1080p and 2160p produced the same 7 reps, the same cues, and knee
+    # angles within 0.4 degrees -- well inside the ~9.5 degree error the Penn
+    # Action benchmark already reports for this joint. MediaPipe resizes its input
+    # internally, so the extra pixels are discarded before they reach the model.
+    # They cost the user upload time and cost the server roughly double the memory
+    # (238 MB at 576x1024 against 774 MB at 2160p), and buy nothing.
     filming_guide=("Film side-on at about hip height with your whole body in "
-                   "frame. For a left/right symmetry check, film a second set "
-                   "from the front."),
+                   "frame. 1080p is plenty — filming in 4K makes the upload "
+                   "slower and doesn't improve the analysis. For a left/right "
+                   "symmetry check, film a second set from the front."),
     # Audited against the cue set on 4 Aug 2026 and found short in three places:
     # hip_rise_first fires but was declared nowhere, and both parked detectors
     # (knee_valgus, heel_lift) were invisible -- so a user asking "do my knees

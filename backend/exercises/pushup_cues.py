@@ -148,10 +148,14 @@ PUSHUP_PROFILE = ExerciseProfile(
     name="pushup",
     display_name="Push-up",
     view_label="side-on",
+    # Same measured resolution note as the squat profile — see the comment there
+    # for the numbers behind it.
     filming_guide=("Film side-on from about a metre away, low down so the camera "
                    "is roughly level with your shoulders, with your whole body "
-                   "from hands to feet in frame. For an even-arms check, film a "
-                   "second set from in front of your head."),
+                   "from hands to feet in frame. 1080p is plenty — filming in 4K "
+                   "makes the upload slower and doesn't improve the analysis. For "
+                   "an even-arms check, film a second set from in front of your "
+                   "head."),
     plane_assessments={
         SAGITTAL: ["push-up depth", "hip position", "descent tempo", "rep consistency"],
         # Both of these need the camera in front of the head. Elbow flare is
