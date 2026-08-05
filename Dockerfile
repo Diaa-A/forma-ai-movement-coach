@@ -151,11 +151,11 @@ EXPOSE 8000
 # rather than hardcoded. Shell form, because $PORT needs expanding; the fallback
 # keeps a plain `docker run -p 8000:8000` working off Railway.
 #
-# --limit-concurrency is a guard rail rather than a tuning knob. /analyze is a
-# sync handler, so FastAPI runs it in a threadpool whose default size is 40, and
-# one analysis peaks at 237 MB (measured, 576x1024) - nearer 400 MB for a 4K
-# upload. Forty at once would be several gigabytes and either an OOM or a
-# surprising bill. Six is far above anything a testing session produces and
-# bounds the worst case at roughly 2.4 GB. Past it, uvicorn returns 503, which
-# the PWA already renders as a server error the user can retry.
-CMD uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000} --limit-concurrency 6
+# No --limit-concurrency here any more. It used to carry 6, as a memory guard,
+# and it was the wrong instrument for two reasons: it caps ALL connections rather
+# than analyses, so a value low enough to bound memory would eventually block the
+# platform's healthcheck and cause a restart loop, and six analyses at 239-353 MB
+# each is far past what this container has. The bound now lives in routes.py as a
+# semaphore around the analysis itself, so /health and /exercises stay reachable
+# while the server is busy. Tune it with MAX_CONCURRENT_ANALYSES.
+CMD uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000}

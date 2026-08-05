@@ -11,6 +11,7 @@ import logging
 import os
 import secrets
 import shutil
+import threading
 from pathlib import Path
 from typing import Optional
 
@@ -64,6 +65,28 @@ MIN_CLIP_SECONDS = 3.0
 MAX_CLIP_SECONDS = 45.0
 IDEAL_MIN_SECONDS = 5.0
 IDEAL_MAX_SECONDS = 30.0
+
+
+# How many analyses may run at once. Everything else -- /health, /exercises, the
+# static files -- is unaffected.
+#
+# This is a memory bound, and it is set from a measured number rather than a
+# guess. One analysis peaks at 239 MB on the 576x1024 reference clip and 353 MB
+# on a 1080p phone clip; a 4K upload is higher again. The container has far less
+# headroom than that times six.
+#
+# Six is what it was, expressed as uvicorn's --limit-concurrency, and that was
+# wrong twice over. The number was invented rather than measured, and the flag
+# caps ALL connections rather than analyses -- so lowering it far enough to bound
+# memory would eventually block the platform's healthcheck and put the service in
+# a restart loop. A semaphore around the expensive part is the right instrument.
+#
+# What actually happened without it: a phone upload was cancelled and retried.
+# Cancelling closes the connection but does not stop the handler, so each retry
+# ADDED an analysis instead of replacing one, and the third one took the
+# container past its limit. The log said "Killed".
+MAX_CONCURRENT_ANALYSES = int(os.environ.get("MAX_CONCURRENT_ANALYSES", "2"))
+_analysis_slots = threading.Semaphore(MAX_CONCURRENT_ANALYSES)
 
 
 def _mb(n_bytes: int) -> str:
@@ -224,6 +247,18 @@ def analyze(
         voice_transcript=voice_note_text,
         voice_audio_path=voice_path,
     )
+    # Refuse rather than pile up. A queued request would hold its upload in
+    # memory while it waited and the phone would sit on a spinner it cannot
+    # interpret; a 503 is something the PWA already renders as a retryable
+    # server error, and it arrives immediately.
+    if not _analysis_slots.acquire(blocking=False):
+        _discard(upload_dir)
+        log.warning("refused an analysis: all %d slots busy", MAX_CONCURRENT_ANALYSES)
+        raise HTTPException(
+            503,
+            "The server is already analysing as many clips as it can handle at "
+            "once. Give it a minute and try again — nothing was lost.")
+
     try:
         # exercise_type has to reach the pipeline, not just the job name. It
         # previously did not: this called the squat-shaped alias, so a push-up
@@ -253,6 +288,8 @@ def analyze(
             "Something went wrong while analysing that clip.",
             headers={"X-Error-Reference": ref},
         )
+    finally:
+        _analysis_slots.release()
 
     return _build_response(result, exercise_type)
 

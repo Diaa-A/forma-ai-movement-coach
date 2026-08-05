@@ -297,3 +297,63 @@ def test_the_ideal_band_sits_inside_the_band_that_is_enforced():
     limits = client.get("/exercises").json()["limits"]
     assert limits["min_seconds"] <= limits["ideal_min_seconds"]
     assert limits["ideal_max_seconds"] <= limits["max_seconds"]
+
+
+# ---------------------------------------------------------------------------
+# not running more analyses than the container can hold
+# ---------------------------------------------------------------------------
+
+def test_a_second_analysis_is_refused_while_the_slots_are_full(monkeypatch, staging):
+    """The container was OOM-killed in production by exactly this.
+
+    A phone upload was cancelled and retried. Cancelling closes the connection
+    but does not stop the handler, so each retry ADDED a running analysis rather
+    than replacing one. Three at 239-353 MB each took the container past its
+    limit and the platform log said "Killed" -- which the user experiences as an
+    upload that stalls partway, because the server is restarting underneath it.
+
+    Refusing immediately is better than queueing: a queued request holds its
+    upload in memory while it waits, and the PWA already renders a 503 as a
+    retryable server error.
+    """
+    import threading
+    monkeypatch.setattr(routes, "probe_clip",
+                        lambda path: ClipProbe(readable=True, seconds=12.0))
+    monkeypatch.setattr(routes, "_analysis_slots", threading.Semaphore(1))
+
+    started = threading.Event()
+    release = threading.Event()
+
+    def slow(*args, **kwargs):
+        started.set()
+        release.wait(timeout=10)
+        raise RuntimeError("done")
+
+    monkeypatch.setattr(routes, "run_pipeline", slow)
+
+    first = threading.Thread(target=lambda: post())
+    first.start()
+    assert started.wait(timeout=10), "the first analysis never reached the pipeline"
+
+    second = post()
+    assert second.status_code == 503
+    assert "already analysing" in second.json()["detail"]
+
+    release.set()
+    first.join(timeout=10)
+
+
+def test_the_slot_is_returned_after_a_failed_analysis(monkeypatch, staging):
+    """A crash must not leak a slot. Leak them all and the service accepts
+    nothing until it restarts, which looks identical to being down."""
+    import threading
+    monkeypatch.setattr(routes, "probe_clip",
+                        lambda path: ClipProbe(readable=True, seconds=12.0))
+    monkeypatch.setattr(routes, "_analysis_slots", threading.Semaphore(1))
+
+    def explode(*args, **kwargs):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(routes, "run_pipeline", explode)
+    assert post().status_code == 500
+    assert post().status_code == 500, "the slot was not released after a failure"
