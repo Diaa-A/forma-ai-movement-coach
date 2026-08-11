@@ -40,10 +40,31 @@ SOURCES = {
 }
 
 
+# The code whose behaviour determines these numbers. Anything outside this list
+# can change without the benchmark meaning anything different.
+EVAL_CODE = [
+    "backend/evaluation/",
+    "backend/pipeline/pose.py",
+    "backend/pipeline/angles.py",
+    "scripts/eval_penn_action.py",
+]
+
+
 def commit() -> str:
+    """The last commit that touched the evaluation code, not HEAD.
+
+    HEAD was the obvious choice and it is the wrong one: it changes on every
+    commit, so regenerating this file after any unrelated change produces a diff
+    that says nothing. Worse, it invites the reading that the numbers were
+    re-measured when only the commit counter moved.
+
+    What a reader actually wants is which version of the measuring code produced
+    the measurement. That only moves when the measurement could have moved.
+    """
     try:
-        return subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT,
-                              capture_output=True, text=True, check=True).stdout.strip()
+        r = subprocess.run(["git", "log", "-1", "--format=%h", "--"] + EVAL_CODE,
+                           cwd=ROOT, capture_output=True, text=True, check=True)
+        return r.stdout.strip() or "unknown"
     except Exception:
         return "unknown"
 
