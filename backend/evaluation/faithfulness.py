@@ -542,20 +542,40 @@ def summarise(results: List[CaseResult]) -> dict:
 
 
 def format_table(summary: dict) -> str:
+    """Requested, scored and faithful — in that order, in the table itself.
+
+    An earlier version printed the scored count alone. That reads considerably
+    stronger than the data supports when a run has been cut short: a table saying
+    "20 generations, 100% faithful" hides that 72 were requested and 52 never
+    returned, and hides that four of the six cases had a sample of one. The
+    denominator belongs next to the number, not in a JSON field only someone
+    reading the raw file would find.
+    """
+    requested = summary.get("runs_requested_per_case")
     lines = []
-    lines.append(f"{'case':<28}{'cues fired':<34}{'scored':>7}{'faithful':>10}{'rate':>8}")
-    lines.append("-" * 87)
+    head = (f"{'case':<30}{'cues fired':<30}{'req':>5}{'scored':>8}"
+            f"{'faithful':>10}{'rate':>8}")
+    lines.append(head)
+    lines.append("-" * len(head))
     for c in summary["cases"]:
         cues = ", ".join(c["cues_fired"]) or "(none)"
-        if len(cues) > 32:
-            cues = cues[:29] + "..."
-        lines.append(f"{c['name']:<28}{cues:<34}{c['scored']:>7}{c['faithful']:>10}"
-                     f"{c['rate']:>7.0%}")
-    lines.append("-" * 87)
+        if len(cues) > 28:
+            cues = cues[:25] + "..."
+        req = str(requested) if requested else "?"
+        rate = f"{c['rate']:.0%}" if c["scored"] else "n/a"
+        flag = "  <- n too small" if 0 < c["scored"] < 5 else ""
+        lines.append(f"{c['name']:<30}{cues:<30}{req:>5}{c['scored']:>8}"
+                     f"{c['faithful']:>10}{rate:>8}{flag}")
+    lines.append("-" * len(head))
     lo, hi = summary["wilson_95"]
-    lines.append(f"{'TOTAL':<28}{'':<34}{summary['generations_scored']:>7}"
-                 f"{summary['faithful']:>10}{summary['faithfulness_rate']:>7.0%}")
+    total_req = (requested or 0) * len(summary["cases"]) if requested else "?"
+    lines.append(f"{'TOTAL':<30}{'':<30}{str(total_req):>5}"
+                 f"{summary['generations_scored']:>8}{summary['faithful']:>10}"
+                 f"{summary['faithfulness_rate']:>8.1%}")
     lines.append(f"95% Wilson interval: {lo:.1%} - {hi:.1%}")
+    if summary.get("stopped_on_quota"):
+        lines.append("NOTE: the run stopped on the provider's daily token cap. Any case "
+                     "with a\n      small n is under-sampled, not evidence of a rate.")
     if summary["violations_by_kind"]:
         lines.append("violations: " + ", ".join(
             f"{k} x{v}" for k, v in sorted(summary["violations_by_kind"].items())))
