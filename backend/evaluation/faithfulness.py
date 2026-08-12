@@ -132,11 +132,10 @@ class QuotaExhausted(RuntimeError):
     is not: it resets on a daily boundary, so a harness that keeps retrying just
     spends its remaining wall clock being refused.
 
-    The interrupted case still does not join the sample — a different n would
-    weight the total unevenly — but the 10 August run excluded its seventh case
-    without recording anything about it, and afterwards nobody could say how many
-    generations had been collected before the cap. So the partial result rides
-    along on the exception for the caller to write down.
+    The interrupted case is still kept out of the sample. It gets attached to the
+    exception anyway so the caller can say which one it was and how far it got --
+    10 August excluded its seventh case and wrote down nothing, and that count is
+    gone for good now.
     """
 
     partial = None      # the CaseResult that was cut off, set by run_case
@@ -363,6 +362,25 @@ def check(report: coaching.CoachingReport, auth: Authorised) -> List[Violation]:
     return unique
 
 
+def claims_about(report: coaching.CoachingReport, term_key: str) -> Dict[str, List[str]]:
+    """Every sentence mentioning one vocabulary key, split the way check() splits.
+
+    Needed because the rate goes blind as soon as a payload authorises a word:
+    claims using it are no longer violations, so nothing about them gets written
+    down. Declaring a gap does that to the gap's own vocabulary, so the lockout
+    arms have to be counted off the text.
+
+    This only lists the sentences. Deciding whether one is asserting the fault or
+    saying the system didn't measure it is a reading and belongs to whoever is
+    writing the result up.
+    """
+    sections = _claim_sentences(report)
+    return {
+        "assertions": [s for s in sections.assertions if term_key in _terms_in(s)],
+        "instructions": [s for s in sections.instructions if term_key in _terms_in(s)],
+    }
+
+
 # ---------------------------------------------------------------------------
 # running it
 # ---------------------------------------------------------------------------
@@ -377,6 +395,13 @@ class CaseResult:
     contract_breaches: int = 0        # model output rejected by _validate -- a finding
     transport_failures: int = 0       # network or rate limit -- not a finding
     violations: List[dict] = field(default_factory=list)
+    # The payload these were scored against, and the text itself. A run costs a
+    # day's quota, and the 10 August one kept only the sentences that violated:
+    # asking it afterwards whether any generation mentioned elbow flare (which
+    # the checker cannot flag, the profile having authorised the word) meant
+    # collecting the whole sample again.
+    evaluation: dict = field(default_factory=dict)
+    generations: List[dict] = field(default_factory=list)
 
     @property
     def rate(self) -> float:
@@ -461,7 +486,8 @@ def run_case(name: str, evaluation: Evaluation, runs: int = 12,
 
     auth = authorised_from(evaluation, voice_transcript)
     result = CaseResult(name=name, exercise=evaluation.exercise,
-                        cues_fired=list(auth.fired))
+                        cues_fired=list(auth.fired),
+                        evaluation=asdict(evaluation))
 
     for i in range(runs):
         try:
@@ -494,6 +520,15 @@ def run_case(name: str, evaluation: Evaluation, runs: int = 12,
 
         result.runs += 1
         found = check(report, auth)
+        result.generations.append({
+            "run": i + 1,
+            "faithful": not found,
+            # the five fields the model wrote -- enough to score it again later
+            "report": {k: getattr(report, k) for k in
+                       ("what_went_well", "primary_issue", "secondary_issues",
+                        "corrective_cues", "next_session_focus")},
+            "violations": [v.to_dict() for v in found],
+        })
         if found:
             for v in found:
                 result.violations.append({**v.to_dict(), "run": i + 1})
@@ -512,14 +547,11 @@ def run_case(name: str, evaluation: Evaluation, runs: int = 12,
 
 
 def unfaithful_generations(results: List[CaseResult]) -> int:
-    """Generations with at least one violation, which is not the violation count.
+    """Generations with at least one violation. Not the same as the claim count.
 
-    The 10 August run printed "un-cued x2" next to "faithful: 71 of 72" and that
-    reads as two failed generations. It was one generation carrying two un-cued
-    claims. 72 - 71 = 1 is the number that belongs beside the rate.
-
-    Contract breaches don't count here: those calls never produced a report, so
-    they are not in the denominator either.
+    "un-cued x2" next to "faithful: 71 of 72" looks like two failed generations
+    and was one generation making two un-cued claims. Contract breaches don't
+    count, those calls never produced a report so they aren't in the denominator.
     """
     return sum(len({v["run"] for v in r.violations if v["kind"] != "contract"})
                for r in results)
@@ -546,9 +578,7 @@ def summarise(results: List[CaseResult], excluded: Optional[List[dict]] = None) 
         "violations_by_kind": by_kind,
         # violations_by_kind counts claims, this counts generations
         "unfaithful_generations": unfaithful_generations(results),
-        # Cases that were started and not finished, named rather than dropped.
-        # Normally empty; when it isn't, method_limits() builds the quota caveat
-        # out of it.
+        # normally empty; method_limits() builds the quota caveat out of it
         "generations_excluded": list(excluded or []),
         # A finding: the model broke its own output schema and the validator
         # caught it. Reported apart from faithfulness because it is a different
@@ -557,9 +587,7 @@ def summarise(results: List[CaseResult], excluded: Optional[List[dict]] = None) 
         # Not a finding: rate limits and network errors. Recorded so the sample
         # size is honest about what it cost to collect.
         "samples_not_obtained": no_sample,
-        # The 4 August file carried this name and the report may still cite it.
-        # It is the two counters above added together: calls that came back with
-        # nothing scoreable, whether the network refused or the validator did.
+        # The name the 4 August file used, kept so the two files can be compared.
         # Scored cases only -- an excluded case is in generations_excluded.
         "calls_that_produced_no_report": breaches + no_sample,
         "cases": [
@@ -573,6 +601,8 @@ def summarise(results: List[CaseResult], excluded: Optional[List[dict]] = None) 
                 "contract_breaches": r.contract_breaches,
                 "samples_not_obtained": r.transport_failures,
                 "violations": r.violations,
+                "evaluation": r.evaluation,
+                "generations": r.generations,
             }
             for r in results
         ],
@@ -583,14 +613,12 @@ def summarise(results: List[CaseResult], excluded: Optional[List[dict]] = None) 
 
 
 def method_limits(summary: dict) -> List[str]:
-    """KNOWN_LIMITS plus the caveats this particular run has earned.
+    """KNOWN_LIMITS plus whatever caveats this run has actually earned.
 
-    Rebuilt from the run's own counts instead of being frozen when the run
-    finished, for the same reason format_table() is regenerated at publish time:
-    the frozen version goes stale. The 10 August file carried "the per-case
-    sample sizes are uneven and smaller than requested" from a 4 August partial
-    run, sitting directly above six cases at 12 of 12. A caveat the data beside
-    it contradicts is an accuracy problem in the same way an overclaim is.
+    Rebuilt from the run's own counts instead of being frozen at the end of it,
+    same reasoning as format_table. Freezing it is what went wrong before: the
+    10 August file was still carrying "uneven and smaller than requested" from
+    the 4 August partial run, printed directly above six cases at 12 of 12.
     """
     limits = list(KNOWN_LIMITS)
     requested = summary.get("runs_requested_per_case")
@@ -651,8 +679,8 @@ def format_table(summary: dict) -> str:
                  f"{summary['generations_scored']:>8}{summary['faithful']:>10}"
                  f"{summary['faithfulness_rate']:>8.1%}")
     lines.append(f"95% Wilson interval: {lo:.1%} - {hi:.1%}")
-    # wrapped rather than hand-broken: the case name goes in the middle of the
-    # sentence, so a long one pushed the second line past the table
+    # wrapped, not hand-broken -- a long case name pushed the second line past
+    # the table
     def note(msg):
         lines.extend(textwrap.wrap(msg, width=len(head), initial_indent="NOTE: ",
                                    subsequent_indent="      "))
@@ -670,8 +698,6 @@ def format_table(summary: dict) -> str:
     if summary["violations_by_kind"]:
         kinds = ", ".join(f"{k} x{v}"
                           for k, v in sorted(summary["violations_by_kind"].items()))
-        # The two numbers get confused otherwise: "un-cued x2" reads as two bad
-        # generations when it was one generation making two un-cued claims.
         n = summary.get("unfaithful_generations")
         scored = summary["generations_scored"]
         where = "" if n is None else \

@@ -298,12 +298,87 @@ def test_wilson_interval_is_empty_with_no_trials():
 
 
 # ---------------------------------------------------------------------------
+# declaring a gap must not disarm the checker
+# ---------------------------------------------------------------------------
+
+def pushup_payload(extra_not_assessed=()):
+    """A push-up payload with the profile's coverage note in `notes`, as the real
+    one has. `extra_not_assessed` is what an arm of the lockout experiment adds."""
+    from backend.exercises.base import ExerciseProfile, coverage_guidance
+    from backend.exercises.pushup_cues import PUSHUP_PROFILE
+
+    p = ExerciseProfile(
+        name=PUSHUP_PROFILE.name, view_label=PUSHUP_PROFILE.view_label,
+        filming_guide=PUSHUP_PROFILE.filming_guide,
+        plane_assessments=PUSHUP_PROFILE.plane_assessments,
+        display_name=PUSHUP_PROFILE.display_name,
+        not_yet_assessed=[a for a in PUSHUP_PROFILE.not_yet_assessed
+                          if "straighten" not in a] + list(extra_not_assessed),
+    )
+    return evaluation(cues=[SHALLOW], exercise="pushup",
+                      notes=["average elbow angle at the bottom: 143° (target ~100° or lower)",
+                             coverage_guidance(p, frontal_observed=False)])
+
+
+# The generation the 10 August run caught, verbatim.
+INVENTED_LOCKOUT = "This means you're not fully extending the movement."
+
+
+def test_declaring_lockout_does_not_authorise_the_invented_claim():
+    """How the entry is worded decides whether the experiment measures anything.
+    notes are authorised and the checker maps extend / extension / lockout to one
+    term key, so declaring it as "fully extend at the top" scores the run-4
+    sentence faithful with the model doing what it always did. "straighten" is
+    outside the vocabulary - visible to the model, invisible to the checker."""
+    declared = F.authorised_from(pushup_payload(
+        ["whether the elbows fully straighten at the top"]))
+    assert not declared.has("lockout")
+    assert F.check(report(primary_issue=INVENTED_LOCKOUT), declared)
+
+    in_its_own_words = F.authorised_from(pushup_payload(
+        ["whether the elbows fully extend at the top"]))
+    assert in_its_own_words.has("lockout"), "if this ever fails the trap is gone"
+    assert not F.check(report(primary_issue=INVENTED_LOCKOUT), in_its_own_words), \
+        "the same invented sentence, now unflagged -- this is what to avoid"
+
+
+def test_the_shipped_pushup_profile_keeps_lockout_outside_the_vocabulary():
+    """The real profile, not a constructed one. Rewording this entry to say
+    "extension" later would quietly retire the checker's ability to catch the
+    claim the whole experiment is about."""
+    from backend.exercises.pushup_cues import PUSHUP_PROFILE
+    declared = " ".join(PUSHUP_PROFILE.not_yet_assessed)
+    assert "straighten" in declared, "lockout is meant to be declared"
+    assert "lockout" not in F._terms_in(declared)
+
+
+def test_a_declared_gap_authorises_its_own_words_when_they_are_in_the_vocabulary():
+    """Not a fix, a property being written down. Flare has been declared since
+    section 15 and "flare" is in the vocabulary, so an invented flare claim goes
+    unflagged in every push-up payload. Which means pushup_unanswerable_question
+    scoring 12/12 is not evidence the model stayed off the user's flare question,
+    and that is the case it exists to test."""
+    auth = F.authorised_from(pushup_payload())
+    assert auth.has("flare")
+    invented = report(primary_issue="Your elbows flared out wide on every rep.")
+    assert not F.check(invented, auth)
+
+
+def test_claims_about_finds_the_sentences_the_rate_cannot_report():
+    r = report(primary_issue="You are not fully extending at the top.",
+               corrective_cues=["Lock out each rep.", "Slow the descent down."])
+    found = F.claims_about(r, "lockout")
+    assert found["assertions"] == ["You are not fully extending at the top."]
+    assert found["instructions"] == ["Lock out each rep."]
+
+
+# ---------------------------------------------------------------------------
 # what the run says about itself
 # ---------------------------------------------------------------------------
-# These exist because the 10 August artefacts carried two caveats that the data
-# printed beside them contradicted. An unearned caveat goes into the report as a
-# limitation the evidence does not support, which is the same accuracy problem as
-# an overclaim pointing the other way.
+# Here because the 10 Aug artefacts carried two caveats the data printed next to
+# them contradicted. An unearned caveat reaches the report as a limitation the
+# evidence doesn't support, which is an accuracy problem the same way an
+# overclaim is.
 
 UNCUED = {"kind": "un-cued", "detail": "'lockout' has no source in the Layer 1 payload",
           "quote": "This means you're not fully extending the movement.", "run": 4}

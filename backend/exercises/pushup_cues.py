@@ -165,7 +165,18 @@ PUSHUP_PROFILE = ExerciseProfile(
         FRONTAL: ["left/right arm symmetry"],
     },
     not_yet_assessed=["elbow flare (how wide the arms travel from the body)",
-                      "head and neck position"],
+                      "head and neck position",
+                      # Lockout, declared with no detector behind it -- the
+                      # faithfulness run caught the model inventing this exact
+                      # claim and the experiment is whether declaring it is
+                      # enough on its own.
+                      #
+                      # Worded "straighten" deliberately. The checker maps
+                      # extend / extension / lockout to one term key and treats
+                      # everything in `notes` as authorised, so declaring it in
+                      # the model's own words would score the invented claim
+                      # faithful without the model changing at all.
+                      "whether the elbows fully straighten at the top"],
 )
 
 

@@ -250,12 +250,9 @@ def main():
             # Report the sample that was collected rather than losing it. The
             # daily cap is a property of the account, not of the system under
             # test, and pretending the run did not happen would be worse than
-            # reporting a smaller N honestly.
-            #
-            # Write down what the cap interrupted, too. The 10 August run
-            # excluded its seventh case correctly and recorded nothing about it,
-            # so the limitation had to be written from memory and the partial
-            # count was simply gone.
+            # reporting a smaller N honestly. Write down what it interrupted too
+            # -- 10 August excluded its seventh case and recorded nothing, so the
+            # partial count is gone.
             stopped_early = True
             partial = getattr(exc, "partial", None)
             excluded.append({
@@ -305,10 +302,9 @@ def coaching_default():
     return coaching.DEFAULT_MODEL
 
 
-# The code that decides what this run measures. The prompt is in the list on
-# purpose: changing what the model is asked for changes what it can be unfaithful
-# about, so a faithfulness number collected before a prompt edit does not describe
-# the system after one.
+# The code that decides what this run measures. coaching.py is in the list
+# because changing what the model is asked for changes what it can be unfaithful
+# about.
 MEASURING_CODE = [
     "backend/evaluation/faithfulness.py",
     "backend/pipeline/coaching.py",
@@ -317,14 +313,12 @@ MEASURING_CODE = [
 
 
 def code_commit() -> str:
-    """The commit of the code doing the measuring, stamped when the run happens.
+    """The commit of the measuring code, stamped when the run happens.
 
-    build_chapter5_evidence.py has a near-identical helper for the Penn Action
-    numbers and the duplication is deliberate: that one runs at publish time,
-    which is honest there because the benchmark reproduces bit-identically from
-    current code. This one cannot. A faithfulness run costs a day's quota and is
-    never re-derived, so stamping it at publish time would say today's prompt
-    produced generations collected weeks ago.
+    build_chapter5_evidence.py has a near-identical helper that runs at publish
+    time instead. That is fine for Penn Action, which reproduces bit-identically
+    from current code. A faithfulness run never gets re-derived, so stamping it
+    late would credit today's prompt with generations collected weeks ago.
     """
     try:
         r = subprocess.run(["git", "log", "-1", "--format=%h", "--"] + MEASURING_CODE,
@@ -337,11 +331,10 @@ def code_commit() -> str:
 def provenance(args, summary: dict) -> dict:
     """Collection date, the conditions, and what was left out.
 
-    The 4 August file had this as a paragraph of prose and the 10 August one had
-    it not at all, which is how a reader ended up with a table of numbers and no
-    way to tell when or against what they were collected. Temperature comes from
-    `coaching` rather than being retyped here — a provenance block that disagrees
-    with the request body is worse than no provenance block.
+    The 4 August file had this as prose and the 10 August one had nothing, which
+    left a reader with a table of numbers and no way to tell when or against what
+    they were collected. Temperature is read from `coaching` rather than retyped;
+    a provenance block that disagrees with the request body is worse than none.
     """
     from backend.pipeline import coaching
     return {

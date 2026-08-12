@@ -2,20 +2,19 @@
 
     python scripts/backfill_faithfulness_provenance.py
 
-The run itself is fine — 72 generations, six cases at 12 of 12 — but the harness
-of the day wrote no collection date, no record of the seventh case the token cap
-interrupted, and nothing to distinguish "two un-cued claims" from "two unfaithful
-generations". Re-running to get those fields would cost the whole sample again,
-and the numbers would be different ones, so the metadata is reconstructed here
-instead and marked as reconstructed.
+The run is fine - 72 generations, six cases at 12 of 12. What it didn't write is
+a collection date, any record of the seventh case the cap interrupted, or the
+difference between two un-cued claims and two unfaithful generations. Re-running
+for those fields costs the whole sample again and gives different numbers, so
+they're reconstructed here and labelled as reconstructed.
 
-What is written is only metadata. Every measured count is asserted unchanged
-before and after, and the script refuses to touch a results file whose scored
-cases are not the six from that run — otherwise the next run to land here would
-quietly be stamped with 10 August's provenance.
+Metadata only. Measured counts are compared before and after and the write is
+abandoned if any moved, and it refuses a results file whose scored cases aren't
+the six from that run - otherwise the next run to land here picks up 10 August's
+provenance.
 
-Idempotent. Once the harness has recorded these fields itself (it does now, see
-`provenance()` in run_faithfulness.py) this script is dead and can go.
+Idempotent. run_faithfulness records all this itself now, so once the 10 Aug run
+is superseded this script is dead and can go.
 """
 from __future__ import annotations
 
@@ -44,17 +43,16 @@ COLLECTED = "2026-08-10"
 # Last commit touching the checker or the prompt before that date:
 #   git log -1 --before=2026-08-11 -- backend/evaluation/faithfulness.py \
 #       backend/pipeline/coaching.py scripts/run_faithfulness.py
-# It is a8e5903, "Tell the model to answer the user's question, and to say when
-# it cannot" -- the section 18.7 prompt change. Worth pinning rather than leaving
-# blank: it is the fact that decides whether a later prompt edit invalidates
-# these numbers, and stamping today's commit instead would claim the current
-# prompt produced generations collected two days ago.
+# a8e5903, "Tell the model to answer the user's question, and to say when it
+# cannot" - the 18.7 prompt change. Pinned rather than left blank because it's
+# what decides whether a later prompt edit invalidates these numbers. Stamping
+# today's commit would claim the current prompt produced them.
 CODE = "a8e5903"
 
-# Seventh in the harness's case order, and the only one missing from the scored
-# six. Named in the work-package limitations as well, so this is not a guess --
-# but how many of its generations came back before the cap is genuinely gone,
-# because the harness discarded the partial CaseResult instead of reporting it.
+# Seventh in the case order and the only one missing from the scored six, and
+# the work-package limitations name it too, so not a guess. How many of its
+# generations came back before the cap is gone though - the harness threw the
+# partial CaseResult away.
 INTERRUPTED_CASE = "secondary_only"
 
 
@@ -91,7 +89,7 @@ def main() -> int:
 
     summary["generations_excluded"] = [{
         "case": INTERRUPTED_CASE,
-        # Not zero. Zero would claim it never started, and it did.
+        # not 0 - zero would claim it never started, and it did
         "generations_obtained": None,
         "reason": "provider daily token cap reached part way through the case",
         "treatment": "excluded from the reported sample, not merged -- a case with a "
