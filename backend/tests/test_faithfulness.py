@@ -298,6 +298,109 @@ def test_wilson_interval_is_empty_with_no_trials():
 
 
 # ---------------------------------------------------------------------------
+# what the run says about itself
+# ---------------------------------------------------------------------------
+# These exist because the 10 August artefacts carried two caveats that the data
+# printed beside them contradicted. An unearned caveat goes into the report as a
+# limitation the evidence does not support, which is the same accuracy problem as
+# an overclaim pointing the other way.
+
+UNCUED = {"kind": "un-cued", "detail": "'lockout' has no source in the Layer 1 payload",
+          "quote": "This means you're not fully extending the movement.", "run": 4}
+UNCUED_TOO = {"kind": "un-cued", "detail": "'lockout' has no source in the Layer 1 payload",
+              "quote": "Focus on slowing down your descent and fully extending your elbows.",
+              "run": 4}
+
+
+def case(name, scored=12, faithful=12, violations=(), breaches=0, no_sample=0):
+    return F.CaseResult(name=name, exercise="pushup", cues_fired=["shallow_depth"],
+                        runs=scored, faithful=faithful, contract_breaches=breaches,
+                        transport_failures=no_sample, violations=list(violations))
+
+
+def complete_run(excluded=None):
+    """The 10 August run: six cases at 12 of 12, one generation unfaithful."""
+    results = [case("squat_lean"),
+               case("pushup_shallow", faithful=11, violations=[UNCUED, UNCUED_TOO]),
+               case("pushup_sag"), case("squat_with_pain_note"),
+               case("pushup_unanswerable_question"), case("clean_no_cues")]
+    summary = F.summarise(results, excluded=excluded)
+    summary["runs_requested_per_case"] = 12
+    summary["stopped_on_quota"] = excluded is not None
+    summary["method_limits"] = F.method_limits(summary)
+    return summary
+
+
+def test_two_claims_in_one_generation_are_one_unfaithful_generation():
+    """violations_by_kind said "un-cued x2" next to "faithful: 71 of 72", which
+    reads as two failed generations. Both un-cued claims were in run 4 of
+    pushup_shallow. The chapter would have restated it wrongly."""
+    summary = complete_run()
+    assert summary["violations_by_kind"] == {"un-cued": 2}
+    assert summary["unfaithful_generations"] == 1
+    assert summary["generations_scored"] - summary["faithful"] == 1
+
+
+def test_a_run_with_every_case_complete_is_not_called_undersampled():
+    """The carried-over caveat said the per-case sample sizes were "uneven and
+    smaller than requested". Every case was 12, and runs_requested_per_case was
+    12. It was true of the 4 August partial run and false of this one."""
+    limits = " ".join(complete_run()["method_limits"]).lower()
+    assert "smaller than requested" not in limits
+    assert "uneven" not in limits
+
+
+def test_the_table_does_not_warn_about_small_samples_when_none_are_small():
+    table = F.format_table(complete_run()).lower()
+    assert "under-sampled" not in table
+    assert "small n" not in table
+    assert "in 1 unfaithful generation of 72" in table
+
+
+def test_an_interrupted_case_is_named_rather_than_just_counted():
+    """Excluding the seventh case was the right call — a different n would weight
+    the total unevenly — but the run recorded nothing about which case it was, so
+    the limitation had to be written from memory afterwards."""
+    summary = complete_run(excluded=[{
+        "case": "secondary_only", "generations_obtained": None,
+        "reason": "provider daily token cap reached part way through the case",
+        "treatment": "excluded from the reported sample, not merged"}])
+    caveat = " ".join(summary["method_limits"][len(F.KNOWN_LIMITS):])
+    assert "secondary_only" in caveat
+    assert "12" in caveat, "the scored cases being complete is the other half of it"
+    assert "secondary_only" in F.format_table(summary)
+
+
+def test_an_unrecorded_partial_count_is_not_reported_as_zero():
+    """None means nobody wrote it down; 0 would claim the case never started."""
+    summary = complete_run(excluded=[{
+        "case": "secondary_only", "generations_obtained": None,
+        "reason": "cap", "treatment": "excluded"}])
+    # only the caveat this run added -- the standing limits mention 60
+    # generations, and a substring search over all of them matches that
+    caveat = " ".join(summary["method_limits"][len(F.KNOWN_LIMITS):])
+    assert "not recorded" in caveat
+    assert "0 generation" not in caveat
+
+
+def test_calls_that_produced_no_report_is_the_two_counters_together():
+    """The name the 4 August file used. It was not replaced by one field but by
+    two, and a reader comparing the files needs the sum to still be there."""
+    summary = F.summarise([case("a", scored=10, faithful=10, breaches=1, no_sample=2)])
+    assert summary["contract_breaches"] == 1
+    assert summary["samples_not_obtained"] == 2
+    assert summary["calls_that_produced_no_report"] == 3
+
+
+def test_summarise_does_not_grow_the_module_level_limits():
+    before = len(F.KNOWN_LIMITS)
+    summary = complete_run(excluded=[{"case": "x", "generations_obtained": 3,
+                                      "reason": "cap", "treatment": "excluded"}])
+    assert len(summary["method_limits"]) > before
+    assert len(F.KNOWN_LIMITS) == before
+
+
+# ---------------------------------------------------------------------------
 # the shape of coaching.json
 # ---------------------------------------------------------------------------
 

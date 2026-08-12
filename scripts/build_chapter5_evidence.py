@@ -43,7 +43,12 @@ SOURCES = {
 # The code whose behaviour determines these numbers. Anything outside this list
 # can change without the benchmark meaning anything different.
 EVAL_CODE = [
-    "backend/evaluation/",
+    # Named files, not the whole of backend/evaluation/. faithfulness.py lives in
+    # there too and cannot move a Penn Action number, so a directory here means
+    # editing the checker restamps this file with a commit that changed nothing
+    # in it -- the same empty diff the docstring below rejects HEAD for.
+    "backend/evaluation/penn_action.py",
+    "backend/evaluation/metrics.py",
     "backend/pipeline/pose.py",
     "backend/pipeline/angles.py",
     "scripts/eval_penn_action.py",
@@ -239,6 +244,12 @@ def publish_faithfulness():
 
     The summary is regenerated rather than copied, so a change to `format_table`
     reaches the published artefact without burning provider quota on a rerun.
+
+    `method_limits` is regenerated for the same reason, and it needed to be: the
+    10 August run carried a caveat about uneven, smaller-than-requested samples
+    that had been true of a partial run on 4 August and was false of every case
+    in the file it was sitting in. Measured counts are copied untouched — only
+    the prose derived from them is rebuilt.
     """
     src = FAITHFULNESS_SRC / "results.json"
     if not src.is_file():
@@ -248,6 +259,7 @@ def publish_faithfulness():
     from backend.evaluation import faithfulness as F
 
     summary = json.loads(src.read_text(encoding="utf-8"))
+    summary["method_limits"] = F.method_limits(summary)
     (OUT / "faithfulness_results.json").write_text(
         json.dumps(summary, indent=2), encoding="utf-8")
     text = F.format_table(summary)

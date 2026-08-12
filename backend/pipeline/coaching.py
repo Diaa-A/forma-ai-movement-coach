@@ -41,6 +41,10 @@ from ..exercises.mechanics import Evaluation, CueHit
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 DEFAULT_MODEL = "llama-3.3-70b-versatile"
 REQUEST_TIMEOUT = 30.0
+# Named because the faithfulness harness has to record the temperature it
+# measured at, and a run whose provenance says 0.4 while the request sends
+# something else is worse than one that says nothing.
+TEMPERATURE = 0.4
 
 log = logging.getLogger("coach.coaching")
 
@@ -153,7 +157,7 @@ def _call_groq(system_prompt: str, user_prompt: str, model: str,
                api_key: str) -> dict:
     body = {
         "model": model,
-        "temperature": 0.4,
+        "temperature": TEMPERATURE,
         "max_tokens": 700,
         "response_format": {"type": "json_object"},
         "messages": [

@@ -30,7 +30,9 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
 import sys
+from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -234,8 +236,9 @@ def main():
 
     results = []
     constructed_flags = {}
+    excluded = []
     stopped_early = False
-    for name, ev, transcript, is_constructed in cases:
+    for i, (name, ev, transcript, is_constructed) in enumerate(cases):
         print(f"  {name}  (cues: {[c.flag for c in ev.cues_fired] or 'none'}"
               f"{', pain transcript' if transcript else ''})")
         constructed_flags[name] = is_constructed
@@ -248,7 +251,27 @@ def main():
             # daily cap is a property of the account, not of the system under
             # test, and pretending the run did not happen would be worse than
             # reporting a smaller N honestly.
+            #
+            # Write down what the cap interrupted, too. The 10 August run
+            # excluded its seventh case correctly and recorded nothing about it,
+            # so the limitation had to be written from memory and the partial
+            # count was simply gone.
             stopped_early = True
+            partial = getattr(exc, "partial", None)
+            excluded.append({
+                "case": name,
+                "generations_obtained": partial.runs if partial is not None else 0,
+                "reason": "provider daily token cap reached part way through the case",
+                "treatment": "excluded from the reported sample, not merged -- a case "
+                             "with a different n would weight the total unevenly",
+            })
+            for later in cases[i + 1:]:
+                excluded.append({
+                    "case": later[0],
+                    "generations_obtained": 0,
+                    "reason": "not attempted, the run stopped on the token cap first",
+                    "treatment": "excluded from the reported sample",
+                })
             print(f"\n[!] daily token quota exhausted — stopping with a partial sample.")
             print(f"    {str(exc)[:160]}")
             break
@@ -256,17 +279,15 @@ def main():
     if not results:
         raise SystemExit("no samples collected — nothing to report")
 
-    summary = F.summarise(results)
+    summary = F.summarise(results, excluded=excluded)
     for c in summary["cases"]:
         c["constructed"] = constructed_flags.get(c["name"], False)
     summary["model"] = args.model
     summary["runs_requested_per_case"] = args.runs
     summary["stopped_on_quota"] = stopped_early
-    if stopped_early:
-        summary["method_limits"] = summary["method_limits"] + [
-            "This run stopped early on the provider's daily token cap, so the "
-            "per-case sample sizes are uneven and smaller than requested. The "
-            "rate is still computed over the generations that were obtained."]
+    summary["provenance"] = provenance(args, summary)
+    # Built last, because it reads the fields set above.
+    summary["method_limits"] = F.method_limits(summary)
 
     (OUT / f"results{suffix}.json").write_text(json.dumps(summary, indent=2))
     table = F.format_table(summary)
@@ -282,6 +303,57 @@ def main():
 def coaching_default():
     from backend.pipeline import coaching
     return coaching.DEFAULT_MODEL
+
+
+# The code that decides what this run measures. The prompt is in the list on
+# purpose: changing what the model is asked for changes what it can be unfaithful
+# about, so a faithfulness number collected before a prompt edit does not describe
+# the system after one.
+MEASURING_CODE = [
+    "backend/evaluation/faithfulness.py",
+    "backend/pipeline/coaching.py",
+    "scripts/run_faithfulness.py",
+]
+
+
+def code_commit() -> str:
+    """The commit of the code doing the measuring, stamped when the run happens.
+
+    build_chapter5_evidence.py has a near-identical helper for the Penn Action
+    numbers and the duplication is deliberate: that one runs at publish time,
+    which is honest there because the benchmark reproduces bit-identically from
+    current code. This one cannot. A faithfulness run costs a day's quota and is
+    never re-derived, so stamping it at publish time would say today's prompt
+    produced generations collected weeks ago.
+    """
+    try:
+        r = subprocess.run(["git", "log", "-1", "--format=%h", "--"] + MEASURING_CODE,
+                           cwd=ROOT, capture_output=True, text=True, check=True)
+        return r.stdout.strip() or "unknown"
+    except Exception:
+        return "unknown"
+
+
+def provenance(args, summary: dict) -> dict:
+    """Collection date, the conditions, and what was left out.
+
+    The 4 August file had this as a paragraph of prose and the 10 August one had
+    it not at all, which is how a reader ended up with a table of numbers and no
+    way to tell when or against what they were collected. Temperature comes from
+    `coaching` rather than being retyped here — a provenance block that disagrees
+    with the request body is worse than no provenance block.
+    """
+    from backend.pipeline import coaching
+    return {
+        "collected": date.today().isoformat(),
+        "code": code_commit(),
+        "model": args.model,
+        "temperature": coaching.TEMPERATURE,
+        "runs_requested_per_case": args.runs,
+        "cases_scored": [c["name"] for c in summary["cases"]],
+        "layer1_payloads": str(CACHE.relative_to(ROOT)).replace("\\", "/"),
+        "excluded": summary.get("generations_excluded", []),
+    }
 
 
 def write_figure(summary: dict):
