@@ -176,6 +176,15 @@ def main():
                          "this has to be a distribution, not one verdict)")
     ap.add_argument("--rebuild-cache", action="store_true",
                     help="re-analyse the clips instead of using cached evaluations")
+    ap.add_argument("--case", default="",
+                    help="comma-separated case names to run instead of all of them. "
+                         "The lockout experiment needs one case measured three times, "
+                         "and running all seven would cost six times the quota it needs "
+                         "- roughly a day's free-tier allowance per arm.")
+    ap.add_argument("--label", default="",
+                    help="suffix for the output filenames. Defaults to the case names "
+                         "when --case is used, so a single-case run cannot overwrite "
+                         "the full-run results it is being compared against.")
     ap.add_argument("--pause", type=float, default=1.0, help="seconds between calls")
     ap.add_argument("--model", default=coaching_default())
     args = ap.parse_args()
@@ -203,7 +212,25 @@ def main():
     for name, ev in constructed_cases().items():
         cases.append((name, ev, "", True))
 
-    print(f"\n[+] {len(cases)} cases x {args.runs} generations, model {args.model}\n")
+    # Filtering writes to its own files. Overwriting results.json with a one-case
+    # run would destroy the baseline the run is being compared against, which for
+    # the lockout experiment is the entire point of doing it.
+    suffix = ""
+    if args.case:
+        wanted = [c.strip() for c in args.case.split(",") if c.strip()]
+        available = [c[0] for c in cases]
+        unknown = [c for c in wanted if c not in available]
+        if unknown:
+            raise SystemExit(f"unknown case(s): {unknown}\navailable: {available}")
+        cases = [c for c in cases if c[0] in wanted]
+        suffix = "_" + "_".join(wanted)
+    if args.label:
+        suffix = "_" + args.label.strip().replace(" ", "_")
+
+    print(f"\n[+] {len(cases)} cases x {args.runs} generations, model {args.model}")
+    if suffix:
+        print(f"    writing to results{suffix}.json — the full-run files are untouched")
+    print()
 
     results = []
     constructed_flags = {}
@@ -241,11 +268,12 @@ def main():
             "per-case sample sizes are uneven and smaller than requested. The "
             "rate is still computed over the generations that were obtained."]
 
-    (OUT / "results.json").write_text(json.dumps(summary, indent=2))
+    (OUT / f"results{suffix}.json").write_text(json.dumps(summary, indent=2))
     table = F.format_table(summary)
-    (OUT / "summary.txt").write_text(table)
+    (OUT / f"summary{suffix}.txt").write_text(table)
     print("\n" + table)
 
+    summary["_suffix"] = suffix
     write_figure(summary)
     print(f"\nwritten to {OUT.relative_to(ROOT)}/")
     return 0
@@ -284,7 +312,7 @@ def write_figure(summary: dict):
         ax.text(i, c["rate"] + 0.02, f"{c['faithful']}/{c['scored']}",
                 ha="center", fontsize=8)
     fig.tight_layout()
-    fig.savefig(OUT / "faithfulness.png", dpi=150)
+    fig.savefig(OUT / f"faithfulness{summary.get('_suffix','')}.png", dpi=150)
     plt.close(fig)
 
 
