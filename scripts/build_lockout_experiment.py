@@ -30,6 +30,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+import textwrap
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -69,6 +70,31 @@ CHANGES = {
     "declared": ("lockout added to not_yet_assessed in PUSHUP_PROFILE, no detector. "
                  "The only difference in the prompt is one clause in the coverage note"),
     "detected": "a lockout cue behind elbow angle at the top of the rep",
+}
+
+# Arm B did not happen, and the reason is a result rather than an excuse, so it
+# travels with the numbers instead of being left as a blank row.
+DETECTED_STATUS = {
+    "state": "not built",
+    "reason": (
+        "No clip in the fixture set fails to lock out, so there is no positive "
+        "class to set a threshold against. 17 clips and 66 reps were measured "
+        "three ways and every step wider than Penn Action's 8.1 degree elbow "
+        "error falls at the bottom of the distribution, separating clips whose "
+        "tracking has come apart rather than clips where someone finished short. "
+        "8171383, the one clip doing visibly partial reps, sits mid-table at "
+        "159.2 degrees: its bottom is shallow and its extension is normal, so it "
+        "is a depth failure and not a lockout one."),
+    "why_not_ship_a_number_anyway": (
+        "The other thresholds in pushup.py were set on data that separated - deep "
+        "clips bottom out at 56-93 and shallow ones at 106-134, so 120 sits in a "
+        "real gap. A lockout threshold here would be splitting one healthy "
+        "distribution in half. Knee valgus and elbow flare are both parked for "
+        "the same reason."),
+    "what_would_unblock_it": (
+        "One clip of someone deliberately stopping short of straight arms. That "
+        "is the positive class; the measuring code already works."),
+    "evidence": "report/chapter5/lockout_calibration.json",
 }
 
 # Did the report pass any of the coverage declaration on to the user - a
@@ -236,8 +262,15 @@ def build() -> dict:
             "faithfulness rate, reported against each arm's own payload and "
             "against the baseline payload. A gap between the two is the checker "
             "moving, not the model."),
-        "arms_not_yet_run": missing,
+        "arms_not_run": missing,
+        "detected_arm": DETECTED_STATUS,
         "findings": [
+            "The third state was not reachable. Declaring lockout changed nothing "
+            "measurable and detecting it cannot be calibrated from the fixtures "
+            "available, so the honest state for lockout is where arm A left it - "
+            "declared, not detected. That is what section 15's three-state rule "
+            "prescribes for exactly this situation, arrived at by measurement "
+            "rather than by argument.",
             "On pushup_unanswerable_question the model answered the user's "
             "question 0 times out of 12. The transcript reaches the prompt, the "
             "coverage note names elbow flare as not assessed, and SYSTEM_PROMPT "
@@ -308,8 +341,15 @@ def table(d: dict) -> str:
         L.append("-" * len(hdr))
         L.append("")
 
-    if d["arms_not_yet_run"]:
-        L.append(f"not yet run: {', '.join(d['arms_not_yet_run'])}")
+    if d["arms_not_run"]:
+        s = d["detected_arm"]
+        L.append(f"detected arm: {s['state']} ({', '.join(d['arms_not_run'])})")
+        for line in (s["reason"], s["why_not_ship_a_number_anyway"],
+                     s["what_would_unblock_it"]):
+            L.extend(textwrap.wrap(line, width=len(hdr), initial_indent="  ",
+                                   subsequent_indent="  "))
+            L.append("")
+        L.append(f"  evidence: {s['evidence']}")
         L.append("")
     L.append("'vs baseline' scores the same generations against the baseline payload's")
     L.append("authorised set. Where it differs from 'faithful', that difference is the")
