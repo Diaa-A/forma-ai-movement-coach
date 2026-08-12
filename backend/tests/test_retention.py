@@ -156,6 +156,65 @@ def test_one_undeletable_job_does_not_stop_the_rest(roots, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# the thread that actually runs it
+# ---------------------------------------------------------------------------
+# The sweep function was tested and the startup pass was observed on real data.
+# The 15-minute thread was neither, which is the half that keeps a long-running
+# deployment clean -- a TTL nothing fires is a retention policy on paper.
+
+def test_the_sweep_thread_keeps_firing_and_stops_when_told(monkeypatch):
+    import threading
+    from backend import main
+
+    calls = []
+    monkeypatch.setattr(main.retention, "SWEEP_INTERVAL_SECONDS", 0.01)
+    monkeypatch.setattr(main.retention, "sweep", lambda roots: calls.append(roots))
+
+    main._sweep_stop.clear()
+    t = threading.Thread(target=main._sweep_forever, daemon=True)
+    t.start()
+    for _ in range(200):                      # up to ~2s, exits as soon as it can
+        if len(calls) >= 3:
+            break
+        time.sleep(0.01)
+    main._sweep_stop.set()
+    t.join(timeout=2)
+
+    assert len(calls) >= 3, f"thread fired {len(calls)} times, expected to repeat"
+    assert not t.is_alive(), "the thread ignored the stop event"
+    assert calls[0], "swept an empty list of roots"
+
+
+def test_a_failing_sweep_does_not_kill_the_thread(monkeypatch):
+    """Otherwise one transient disk error turns into retention silently never
+    running again for the life of the process, and nothing says so."""
+    import threading
+    from backend import main
+
+    calls = []
+
+    def flaky(roots):
+        calls.append(roots)
+        if len(calls) == 1:
+            raise OSError("disk busy")
+
+    monkeypatch.setattr(main.retention, "SWEEP_INTERVAL_SECONDS", 0.01)
+    monkeypatch.setattr(main.retention, "sweep", flaky)
+
+    main._sweep_stop.clear()
+    t = threading.Thread(target=main._sweep_forever, daemon=True)
+    t.start()
+    for _ in range(200):
+        if len(calls) >= 3:
+            break
+        time.sleep(0.01)
+    main._sweep_stop.set()
+    t.join(timeout=2)
+
+    assert len(calls) >= 3, "the thread died on the first failure"
+
+
+# ---------------------------------------------------------------------------
 # delete now
 # ---------------------------------------------------------------------------
 
