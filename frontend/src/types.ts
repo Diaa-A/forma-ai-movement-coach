@@ -36,6 +36,12 @@ export interface Limits {
   /** the band that gives a good read — worth a warning, not a refusal */
   ideal_min_seconds: number
   ideal_max_seconds: number
+  /** how long a clip and its results are kept, and the sentence to show for it.
+   *  Served rather than written here for the same reason as everything above,
+   *  and more so: this one is a promise, and a copy of it in the frontend is a
+   *  promise that can drift away from the sweep that keeps it. */
+  retention_hours: number
+  retention_note: string
 }
 
 export interface Catalog {

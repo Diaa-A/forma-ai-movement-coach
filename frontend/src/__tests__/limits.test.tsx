@@ -17,7 +17,8 @@ import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import ErrorPanel from '../components/ErrorPanel'
-import type { ApiError, Limits } from '../types'
+import Capture from '../screens/Capture'
+import type { ApiError, Exercise, Limits } from '../types'
 import { FALLBACK, checkAudioFile, checkDuration, checkVideoFile } from '../validation'
 
 const noop = () => {}
@@ -64,6 +65,40 @@ describe('limits that arrived from the server', () => {
     expect(check.ok).toBe(true)
     expect(check.warning).toBe(true)
     expect(check.message).toMatch(/10-15/)
+  })
+})
+
+const squat: Exercise = {
+  id: 'squat',
+  name: 'Squat',
+  view_label: 'side-on',
+  filming_guide: 'Film side-on from about two metres away.',
+  assesses: { sagittal: ['squat depth'] },
+}
+
+describe('the retention period the user is shown', () => {
+  it('is the sentence the server sent, not one written here', () => {
+    render(
+      <Capture
+        exercise={squat}
+        limits={{ ...FALLBACK, retention_hours: 72, retention_note: 'Kept for 3 days.' }}
+        online
+        onSubmit={noop}
+        onBack={noop}
+      />,
+    )
+    expect(screen.getByText('Kept for 3 days.')).toBeTruthy()
+  })
+
+  it('says nothing at all when the catalogue never arrived', () => {
+    // Every other fallback is a near-enough guess at the server's value. This one
+    // cannot be: a period shown here is a promise about someone's video, and if
+    // we have not been told it, we do not have one to make.
+    const { container } = render(
+      <Capture exercise={squat} online onSubmit={noop} onBack={noop} />,
+    )
+    expect(FALLBACK.retention_note).toBe('')
+    expect(container.textContent).not.toMatch(/deleted automatically|hours|days/i)
   })
 
   it('apply to the voice note too', () => {

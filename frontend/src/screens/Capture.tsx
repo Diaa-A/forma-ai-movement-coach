@@ -154,6 +154,16 @@ export default function Capture({ exercise, limits = FALLBACK, online,
         onText={setVoiceText}
       />
 
+      {/* Said here, on the screen where the upload actually happens, rather than
+          buried somewhere the user has already passed. The wording comes from
+          the server so it always matches the TTL the sweep enforces — writing
+          "24 hours" here would be a promise this file cannot keep. */}
+      {limits?.retention_note && (
+        <p className="small muted" style={{ marginBottom: 0 }}>
+          {limits.retention_note}
+        </p>
+      )}
+
       <button
         className="btn btn-primary"
         disabled={!picked || checking || !online}

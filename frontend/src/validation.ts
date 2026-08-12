@@ -22,6 +22,13 @@ export const FALLBACK: Limits = {
   max_seconds: 45,
   ideal_min_seconds: 5,
   ideal_max_seconds: 30,
+  // Blank on purpose, and the only fallback value here that is not a best guess
+  // at the server's. A stale size limit costs someone a rejected upload; a stale
+  // retention period is a promise about their video that nothing is keeping. If
+  // the catalogue has not arrived we have not been told the period, so the UI
+  // says nothing rather than guessing at one.
+  retention_hours: 0,
+  retention_note: '',
 }
 
 /** Roughly where an upload stops being a few seconds and starts being a wait,

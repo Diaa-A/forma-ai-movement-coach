@@ -43,6 +43,13 @@ class LimitsOut(BaseModel):
     max_seconds: float
     ideal_min_seconds: float
     ideal_max_seconds: float
+    # Served for the same reason as the rest of it. The consent copy has to state
+    # a retention period, and a period typed into the frontend is a period that
+    # can drift away from the one the sweep enforces. `retention_note` is the
+    # wording, built from the number beside it, so the UI shows a sentence rather
+    # than doing arithmetic on hours.
+    retention_hours: float
+    retention_note: str
 
 
 class ExercisesResponse(BaseModel):

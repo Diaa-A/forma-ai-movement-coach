@@ -14,6 +14,8 @@ Uploaded originals go to data/uploads/<job_id>/.
 """
 import logging
 import os
+import threading
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -21,7 +23,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from .api.routes import router as api_router, OUTPUT_ROOT
+from .api import retention
+from .api.routes import router as api_router, OUTPUT_ROOT, UPLOAD_ROOT
 
 
 # load .env (mirrors what analyze_squat.py does)
@@ -49,7 +52,50 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
 
-app = FastAPI(title="AI Fitness & Movement Coach", version="0.1.0")
+# ---------------------------------------------------------------------------
+# Retention sweep (WP-07)
+# ---------------------------------------------------------------------------
+# A daemon thread rather than a request hook, because a deployment with no
+# traffic is exactly the one where old clips would otherwise sit longest. Daemon
+# so it never holds up a shutdown; the worst a killed sweep costs is one
+# interval, and the next start picks up whatever it missed.
+_sweep_stop = threading.Event()
+
+
+def _sweep_forever():
+    roots = [UPLOAD_ROOT, OUTPUT_ROOT]
+    while not _sweep_stop.wait(retention.SWEEP_INTERVAL_SECONDS):
+        try:
+            retention.sweep(roots)
+        except Exception:
+            # Never let one failure kill the thread. That would turn a transient
+            # disk error into retention silently never running again.
+            logging.getLogger("coach.retention").exception("sweep failed")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    if os.environ.get("DISABLE_RETENTION_SWEEP"):
+        logging.getLogger("coach.retention").warning(
+            "retention sweep disabled by DISABLE_RETENTION_SWEEP")
+        yield
+        return
+    # One pass immediately. A restart is when there is most likely to be
+    # something expired lying around, and waiting a full interval for the first
+    # sweep is the difference between a stated period and an approximate one.
+    try:
+        retention.sweep([UPLOAD_ROOT, OUTPUT_ROOT])
+    except Exception:
+        logging.getLogger("coach.retention").exception("startup sweep failed")
+    _sweep_stop.clear()
+    threading.Thread(target=_sweep_forever, name="retention-sweep",
+                     daemon=True).start()
+    yield
+    _sweep_stop.set()
+
+
+app = FastAPI(title="AI Fitness & Movement Coach", version="0.1.0",
+              lifespan=lifespan)
 
 # CORS is off by default, which is not an oversight.
 #
@@ -92,6 +138,8 @@ API_INDEX = {
                          "voice_note_text (opt), pose_model (opt), dry_run_coach (opt)",
         "GET  /results/<job>/<file>": "static — annotated.mp4, worst.jpg, "
                                       "best.jpg, angles.json, coaching.json",
+        "DELETE /jobs/<job>": "delete an analysis now rather than waiting for the "
+                              "retention period (served in /exercises limits)",
         "GET  /health": "liveness check",
     },
 }

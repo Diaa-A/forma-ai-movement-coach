@@ -21,6 +21,7 @@ from fastapi.responses import JSONResponse
 from ..pipeline.probe import probe_clip
 from ..pipeline.runner import run_pipeline, new_job_id, RunOptions, RunResult
 from ..exercises.registry import PROFILES, exercise_ids
+from . import retention
 from .schemas import (AnalyzeResponse, KeyFrame, RepStat, CoachingReportOut,
                       ExerciseOut, ExercisesResponse, LimitsOut)
 
@@ -181,7 +182,32 @@ def current_limits() -> LimitsOut:
         max_seconds=MAX_CLIP_SECONDS,
         ideal_min_seconds=IDEAL_MIN_SECONDS,
         ideal_max_seconds=IDEAL_MAX_SECONDS,
+        retention_hours=retention.RETENTION_HOURS,
+        retention_note=retention.retention_note(),
     )
+
+
+@router.delete("/jobs/{job_id}")
+def delete_job(job_id: str):
+    """Delete one analysis now, without waiting for the retention period.
+
+    The TTL sweep is the guarantee; this is the thing a consent form can point at
+    when someone wants their clip gone immediately rather than tomorrow.
+
+    A job that is not there returns the same 200 as one that was just removed.
+    They are the same outcome to the caller, and a 404 would let anyone probe
+    which job ids exist.
+    """
+    try:
+        result = retention.delete_job([UPLOAD_ROOT, OUTPUT_ROOT], job_id)
+    except ValueError:
+        raise HTTPException(400, "That is not a job id.")
+    if result.failed:
+        log.error("delete %s: %d path(s) could not be removed", job_id,
+                  len(result.failed))
+        raise HTTPException(500, "Could not delete that analysis.")
+    return {"job_id": job_id, "deleted": bool(result.deleted),
+            "directories_removed": len(result.paths_removed)}
 
 
 @router.post("/analyze", response_model=AnalyzeResponse)
