@@ -298,6 +298,43 @@ def test_wilson_interval_is_empty_with_no_trials():
 
 
 # ---------------------------------------------------------------------------
+# the constructed cases have to be payloads Layer 1 could actually emit
+# ---------------------------------------------------------------------------
+
+def test_constructed_cases_obey_the_evaluators_own_invariants():
+    """A hand-built payload the evaluator cannot produce is not a harder test,
+    it is a strawman, and it scores the model on something that never happens.
+
+    secondary_only had a descent-duration note and no controlled_tempo positive.
+    In squat_cues the two come off the same descent_durations list: the note is
+    emitted whenever it is non-empty, and the positive whenever the minimum
+    clears _FAST_DESCENT_SEC - and if it did not clear it, fast_descent would be
+    in cues_fired. So note + no fast_descent implies the positive, always.
+
+    That combination cost six false violations in twelve. The model wrote
+    "a more controlled squat", control is in the tempo vocabulary, and with the
+    positive missing there was nothing in the payload to source it to.
+    """
+    import sys
+    sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parents[2]
+                          / "scripts"))
+    import run_faithfulness as R
+    from backend.exercises.squat_cues import SQUAT_POSITIVES
+
+    for name, ev in R.constructed_cases().items():
+        has_note = any("descent duration" in n for n in ev.notes)
+        if not has_note:
+            continue
+        fired = [c.flag for c in ev.cues_fired]
+        if "fast_descent" in fired:
+            continue
+        assert SQUAT_POSITIVES["controlled_tempo"]["text"] in ev.positives, (
+            f"{name} states a descent duration and does not fire fast_descent, so "
+            "the evaluator would have awarded controlled_tempo. Without it the "
+            "word 'control' has no source and ordinary phrasing scores as invention")
+
+
+# ---------------------------------------------------------------------------
 # declaring a gap must not disarm the checker
 # ---------------------------------------------------------------------------
 

@@ -148,7 +148,16 @@ def constructed_cases() -> dict:
             fix=SQUAT_CUES["rep_inconsistency"]["fix"],
             joints=list(SQUAT_CUES["rep_inconsistency"]["joints"]))],
         positives=[SQUAT_POSITIVES["good_depth"]["text"],
-                   SQUAT_POSITIVES["upright_torso"]["text"]],
+                   SQUAT_POSITIVES["upright_torso"]["text"],
+                   # Not decoration. squat_cues emits the descent-duration note
+                   # and this positive off the same list, and if the minimum had
+                   # not cleared _FAST_DESCENT_SEC then fast_descent would be in
+                   # cues_fired instead. Note plus no fast_descent implies the
+                   # positive, so a payload without it is one Layer 1 cannot
+                   # produce. Leaving it out cost six false violations in twelve:
+                   # the model wrote "a more controlled squat", control is in the
+                   # tempo vocabulary, and nothing in the payload sourced it.
+                   SQUAT_POSITIVES["controlled_tempo"]["text"]],
         notes=["average knee angle at the bottom: 92° (target ~90°, deeper acceptable)",
                "average descent duration: 1.40s"],
     )

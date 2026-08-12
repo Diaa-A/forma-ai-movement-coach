@@ -679,6 +679,15 @@ def format_table(summary: dict) -> str:
                  f"{summary['generations_scored']:>8}{summary['faithful']:>10}"
                  f"{summary['faithfulness_rate']:>8.1%}")
     lines.append(f"95% Wilson interval: {lo:.1%} - {hi:.1%}")
+
+    # Both groupings, when a run has been folded together out of more than one
+    # sitting. The chapter may be written while one of the two is already in
+    # print, and a total that appears to shift between drafts invites the reading
+    # that the measurement changed.
+    for label, t in (summary.get("totals_by_grouping") or {}).items():
+        lo2, hi2 = t["wilson_95"]
+        lines.append(f"  {label:<20} {t['faithful']:>3}/{t['generations_scored']:<3}"
+                     f" {t['faithfulness_rate']:>7.1%}   Wilson {lo2:.1%} - {hi2:.1%}")
     # wrapped, not hand-broken -- a long case name pushed the second line past
     # the table
     def note(msg):
