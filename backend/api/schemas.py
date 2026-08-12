@@ -79,6 +79,9 @@ class RepStat(BaseModel):
 
 
 class CoachingReportOut(BaseModel):
+    # First, because it is the thing the user asked about. Declared here or
+    # pydantic drops it out of the response and the field silently never arrives.
+    answer_to_question: Optional[str] = None
     what_went_well: List[str]
     primary_issue: str
     secondary_issues: List[str]

@@ -59,6 +59,17 @@ class CoachingReport:
     source: str   # "llm" or "dry_run"
     model: Optional[str] = None
     filming_tip: Optional[str] = None   # deterministic camera-view guidance
+    # What the user asked about in their voice note, answered. None when they
+    # did not ask anything.
+    #
+    # This field exists because of a measured failure rather than as a nicety.
+    # The prompt has told the model to answer the question first since 4 Aug and
+    # it never did -- 12 of 12 generations on the case built from the original
+    # complaint said nothing about what was asked. There was nowhere to put it.
+    # Every other field is defined in terms of the cue material, "pulled from
+    # POSITIVES", "rephrased PRIMARY fault", so the rule had no slot and the
+    # model followed the schema.
+    answer_to_question: Optional[str] = None
 
     def to_dict(self):
         return asdict(self)
@@ -93,8 +104,9 @@ ABSOLUTE RULES:
   - If the user transcript mentions pain or an injury, acknowledge it briefly
     and recommend speaking to a qualified professional — do not give clinical
     advice yourself.
-  - If a USER VOICE TRANSCRIPT is present, ANSWER WHAT THEY ASKED, and answer it
-    first. It is the thing they wanted to know. Use only the material above.
+  - If a USER VOICE TRANSCRIPT is present, ANSWER WHAT THEY ASKED in the
+    `answer_to_question` field. That field is only for the answer. Use only the
+    material above.
   - If they asked about something the material does not cover, say so plainly in
     one short sentence — for example "this clip was filmed from the side, so it
     can't show how wide your elbows travelled". The diagnostic notes state what
@@ -102,10 +114,15 @@ ABSOLUTE RULES:
     Do NOT ignore the question, and do NOT answer it from general knowledge about
     the exercise. Saying the system did not measure something is always better
     than guessing at it.
+  - If there is no transcript, set `answer_to_question` to null.
   - Output exactly the JSON schema given. No prose outside the JSON.
 
 OUTPUT JSON SCHEMA:
 {
+  "answer_to_question": string | null,      // the reply to the USER VOICE
+                                            // TRANSCRIPT, or null if there was
+                                            // none. Answer only; the findings
+                                            // below stay in their own fields
   "what_went_well": [string, ...],          // 2-3 items, pulled from POSITIVES
   "primary_issue": string,                  // rephrased PRIMARY fault, 1-2 sentences
   "secondary_issues": [string, ...],        // up to 2 rephrased SECONDARY faults
@@ -241,6 +258,11 @@ def _validate(parsed: dict) -> dict:
         raise LLMContractError("next_session_focus missing or empty")
 
     return {
+        # Optional, and deliberately not required even when a transcript was
+        # sent: a model that has nothing to say is better refusing the field than
+        # filling it, and the fallback for an empty one is the rest of the report,
+        # which is still correct.
+        "answer_to_question": _text(parsed.get("answer_to_question")) or None,
         "what_went_well": _string_list(parsed.get("what_went_well"), "what_went_well"),
         "primary_issue": primary,
         "secondary_issues": _string_list(parsed.get("secondary_issues"), "secondary_issues"),

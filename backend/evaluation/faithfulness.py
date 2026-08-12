@@ -119,6 +119,11 @@ KNOWN_LIMITS = [
     "authorised words in a misleading order would pass.",
     "Contradiction detection covers the cues that have a clear opposite. Cues "
     "without one are checked for provenance only.",
+    "The reply to the user's spoken question is exempt from the confidence-gate "
+    "rule, because that field exists to say what the clip could not show and the "
+    "rule exists to catch claims that it could. The cost is real and stated: a "
+    "generation asserting in that field that left and right looked even would "
+    "not be flagged, since the coverage note authorises the word symmetry.",
     "Sample size is capped by the provider, not by the method: the free tier "
     "allows 100,000 tokens per day, which is roughly 60 generations at this "
     "prompt length. A larger N needs a paid tier or several days of collection.",
@@ -280,10 +285,17 @@ class Sections:
     """
     assertions: List[str]
     instructions: List[str]
+    # The reply to the user's question, kept apart from both. It is judged for
+    # invention and prohibited content like everything else, and for
+    # contradiction, but NOT by the confidence-gate rule -- its whole job is to
+    # say what could not be measured, and the gate rule exists to catch the
+    # opposite. Scored with the assertions at first and it flagged 11 of 12
+    # generations for repeating the filming guidance.
+    answer: List[str] = field(default_factory=list)
 
     @property
     def all(self) -> List[str]:
-        return self.assertions + self.instructions
+        return self.assertions + self.instructions + self.answer
 
 
 def _claim_sentences(report: coaching.CoachingReport) -> Sections:
@@ -299,6 +311,7 @@ def _claim_sentences(report: coaching.CoachingReport) -> Sections:
                           + list(report.secondary_issues)),
         instructions=_split(list(report.corrective_cues)
                             + [report.next_session_focus]),
+        answer=_split([report.answer_to_question or ""]),
     )
 
 
@@ -336,7 +349,7 @@ def check(report: coaching.CoachingReport, auth: Authorised) -> List[Violation]:
         pattern = CONTRADICTIONS.get(flag)
         if not pattern:
             continue
-        for sentence in sections.assertions:
+        for sentence in sections.assertions + sections.answer:
             if re.search(pattern, _norm(sentence)):
                 violations.append(Violation(
                     "contradicted", f"contradicts the fired cue '{flag}'", sentence))
@@ -523,10 +536,12 @@ def run_case(name: str, evaluation: Evaluation, runs: int = 12,
         result.generations.append({
             "run": i + 1,
             "faithful": not found,
-            # the five fields the model wrote -- enough to score it again later
+            # what the model wrote -- enough to score it again later. Runs
+            # collected before answer_to_question existed simply lack the key.
             "report": {k: getattr(report, k) for k in
-                       ("what_went_well", "primary_issue", "secondary_issues",
-                        "corrective_cues", "next_session_focus")},
+                       ("answer_to_question", "what_went_well", "primary_issue",
+                        "secondary_issues", "corrective_cues",
+                        "next_session_focus")},
             "violations": [v.to_dict() for v in found],
         })
         if found:

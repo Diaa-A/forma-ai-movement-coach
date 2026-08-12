@@ -19,6 +19,16 @@ interface Props {
 export default function ReportView({ report }: Props) {
   return (
     <div className="stack">
+      {/* First, and before the findings. Someone who recorded a voice note asked
+          about one thing, and the failure this fixes was a fluent report that
+          answered everything except it. */}
+      {report.answer_to_question && (
+        <section className="card">
+          <h3>What you asked</h3>
+          <p style={{ marginBottom: 0 }}>{report.answer_to_question}</p>
+        </section>
+      )}
+
       {report.what_went_well.length > 0 && (
         <section className="card">
           <h3>What you did well</h3>

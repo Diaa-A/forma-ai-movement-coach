@@ -74,6 +74,8 @@ export interface CoachingReport {
   secondary_issues: string[]
   corrective_cues: string[]
   next_session_focus: string
+  /** the reply to the voice note, when one was recorded */
+  answer_to_question?: string | null
   source: ReportSource
   model?: string | null
   /** deterministic camera-view guidance — never LLM-written (Decision 23), so

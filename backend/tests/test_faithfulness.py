@@ -48,6 +48,57 @@ def report(**kw):
 
 
 # ---------------------------------------------------------------------------
+# answering the user's question
+# ---------------------------------------------------------------------------
+# Measured 12 Aug: on pushup_unanswerable_question the model answered the user
+# 0 times in 12. The rule had been in SYSTEM_PROMPT since 4 Aug. What it did not
+# have was anywhere to put the answer -- every output field is defined in terms
+# of the cue material, so the model followed the schema and dropped the rule.
+
+def test_the_answer_field_survives_validation():
+    fields = coaching._validate({
+        "answer_to_question": "  This clip is side-on, so it can't show elbow flare.  ",
+        "primary_issue": "you stopped short of the bottom",
+        "next_session_focus": "lower further",
+    })
+    assert fields["answer_to_question"] == \
+        "This clip is side-on, so it can't show elbow flare."
+
+
+def test_no_answer_is_none_rather_than_an_empty_string():
+    """There is no question on most runs. An empty string would render as a
+    blank card headed "What you asked", which is the no_reps failure again --
+    an absence presented as a finding."""
+    for payload in ({}, {"answer_to_question": None}, {"answer_to_question": "   "}):
+        fields = coaching._validate({**payload, "primary_issue": "x",
+                                     "next_session_focus": "y"})
+        assert fields["answer_to_question"] is None
+
+
+def test_the_answer_field_is_scored_as_strictly_as_the_rest():
+    """It is the field most likely to reach past the payload, because it is the
+    one written in reply to a question. Answering from general knowledge is
+    exactly what it must not do."""
+    ev = evaluation(cues=[SHALLOW], exercise="pushup",
+                    notes=["average elbow angle at the bottom: 143°"])
+    auth = F.authorised_from(ev, voice_transcript="are my arms too flared")
+    invented = report(primary_issue="you stopped short",
+                      answer_to_question="Your knees also caved inward on the last rep.")
+    assert any(v.kind == "un-cued" for v in F.check(invented, auth))
+
+
+def test_saying_the_system_did_not_measure_it_is_not_a_violation():
+    ev = evaluation(cues=[SHALLOW], exercise="pushup",
+                    notes=["This clip is side-on. Not assessed yet by this system: "
+                           "elbow flare (how wide the arms travel from the body)."])
+    auth = F.authorised_from(ev, voice_transcript="are my arms too flared")
+    honest = report(primary_issue="you stopped short",
+                    answer_to_question="This clip is side-on, so it can't show how "
+                                       "wide your elbows travelled.")
+    assert F.check(honest, auth) == []
+
+
+# ---------------------------------------------------------------------------
 # the authorised set
 # ---------------------------------------------------------------------------
 
