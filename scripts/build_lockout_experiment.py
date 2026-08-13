@@ -77,14 +77,48 @@ CHANGES = {
 DETECTED_STATUS = {
     "state": "not built",
     "reason": (
-        "No clip in the fixture set fails to lock out, so there is no positive "
-        "class to set a threshold against. 17 clips and 66 reps were measured "
-        "three ways and every step wider than Penn Action's 8.1 degree elbow "
-        "error falls at the bottom of the distribution, separating clips whose "
-        "tracking has come apart rather than clips where someone finished short. "
-        "8171383, the one clip doing visibly partial reps, sits mid-table at "
-        "159.2 degrees: its bottom is shallow and its extension is normal, so it "
-        "is a depth failure and not a lockout one."),
+        "Top-of-rep elbow angle does not discriminate lockout, tested two ways. "
+        "First, across 17 fixture clips and 66 reps: every step wider than Penn "
+        "Action's 8.1 degree elbow error falls at the bottom of the distribution, "
+        "separating clips whose tracking has come apart rather than clips where "
+        "someone finished short. Second, and more directly, against a deliberate "
+        "positive class filmed for the purpose on 13 Aug - one subject, one "
+        "camera position, one session, three sets: normal, depth-manipulated, and "
+        "a set where the arms were deliberately never straightened."),
+    "deliberate_positive_class": {
+        "why": (
+            "The first test could only say the fixture set contains no lockout "
+            "failure. This one asks the sharper question: when a lockout failure "
+            "is staged on purpose, can the measure see it?"),
+        "median_top_of_rep_elbow_degrees": {
+            "normal": {"max": 161.3, "p90": 160.0, "top_decile_median": 160.9,
+                       "at_boundaries": 151.5},
+            "shallow_control": {"max": 158.0, "p90": 157.1,
+                                "top_decile_median": 157.7, "at_boundaries": 151.1},
+            "deliberate_no_lockout": {"max": 160.0, "p90": 157.9,
+                                      "top_decile_median": 159.0,
+                                      "at_boundaries": 156.9},
+        },
+        "result": (
+            "No statistic separates the staged no-lockout set from the normal "
+            "one. The largest gap is 2.1 degrees and one measure runs backwards, "
+            "against a benchmark error of 8.1. The shallow set behaves as the "
+            "control it is: depth was manipulated and the top was not, and it "
+            "sits with normal throughout."),
+        "why_it_fails": (
+            "The subject's normal push-ups top out at 161 degrees, not 180. Most "
+            "people do not fully lock out, so there is very little room between "
+            "normal and deliberately bent to begin with. The signal is real at "
+            "frame level - 167 degrees with the arms straight at setup, 152 "
+            "mid-set with a visible bend - and it disappears under any "
+            "aggregation a cue could use, because each rep still touches roughly "
+            "160 at its most extended moment."),
+        "what_this_makes_the_finding": (
+            "Stronger than an absent positive class. A staged, visually obvious "
+            "lockout failure is invisible to the measure, so the case for leaving "
+            "lockout declared rather than detected rests on a measurement result "
+            "and not on a missing fixture."),
+    },
     "why_not_ship_a_number_anyway": (
         "The other thresholds in pushup.py were set on data that separated - deep "
         "clips bottom out at 56-93 and shallow ones at 106-134, so 120 sits in a "
@@ -92,8 +126,13 @@ DETECTED_STATUS = {
         "distribution in half. Knee valgus and elbow flare are both parked for "
         "the same reason."),
     "what_would_unblock_it": (
-        "One clip of someone deliberately stopping short of straight arms. That "
-        "is the positive class; the measuring code already works."),
+        "Not another clip - that was tried and is the second test above. It needs "
+        "a different measurement. The frame-level signal exists, so a measure that "
+        "asks whether the arm is straight at a defined instant, rather than taking "
+        "an aggregate over the rep, might survive; so might a per-subject baseline, "
+        "since the failure here is between-subject variation swamping a "
+        "within-subject difference. Both are research, not a threshold, and "
+        "neither belongs in front of a draft deadline."),
     "evidence": "report/chapter5/lockout_calibration.json",
 }
 
