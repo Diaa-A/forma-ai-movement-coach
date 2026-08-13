@@ -360,9 +360,8 @@ def provenance(args, summary: dict) -> dict:
 
 def write_figure(summary: dict):
     """Per-case faithfulness with the overall rate and its interval."""
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
+    from backend.evaluation import plotstyle
+    plt = plotstyle.apply()
 
     cases = summary["cases"]
     names = [c["name"].replace("_", "\n") for c in cases]
@@ -371,22 +370,25 @@ def write_figure(summary: dict):
     overall = summary["faithfulness_rate"]
 
     fig, ax = plt.subplots(figsize=(9, 4.5))
-    colours = ["#c0504d" if r < 1.0 else "#4f81bd" for r in rates]
+    colours = [plotstyle.ACCENT if r < 1.0 else plotstyle.PRIMARY for r in rates]
     ax.bar(names, rates, color=colours)
-    ax.axhline(overall, color="#333", linestyle="--", linewidth=1.2,
+    ax.axhline(overall, color=plotstyle.NEUTRAL, linestyle="--", linewidth=1.2,
                label=f"overall {overall:.0%}")
-    ax.axhspan(lo, hi, color="#333", alpha=0.10,
-               label=f"95% Wilson [{lo:.0%}, {hi:.0%}]")
+    # one decimal, not zero. At n=84 the upper bound is 99.79%, and rounding it
+    # to 100% in the legend says the opposite of what a Wilson interval is for.
+    ax.axhspan(lo, hi, color=plotstyle.BAND, alpha=0.10,
+               label=f"95% Wilson [{lo:.1%}, {hi:.1%}]")
     ax.set_ylim(0, 1.05)
     ax.set_ylabel("faithful generations")
     ax.set_title(f"Layer-2 faithfulness to Layer-1 — {summary['generations_scored']} "
                  f"generations, {summary['model']}")
-    ax.legend(loc="lower right", fontsize=8)
+    ax.legend(loc="lower right")
     for i, c in enumerate(cases):
         ax.text(i, c["rate"] + 0.02, f"{c['faithful']}/{c['scored']}",
-                ha="center", fontsize=8)
+                ha="center", fontsize=9)
     fig.tight_layout()
-    fig.savefig(OUT / f"faithfulness{summary.get('_suffix','')}.png", dpi=150)
+    fig.savefig(OUT / f"faithfulness{summary.get('_suffix','')}.png",
+                dpi=plotstyle.DPI)
     plt.close(fig)
 
 

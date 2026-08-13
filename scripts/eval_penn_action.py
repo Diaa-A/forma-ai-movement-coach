@@ -40,6 +40,7 @@ from backend.evaluation.penn_action import (
     PENN_JOINTS, PENN_TO_MP, load_sequence, find_sequences_by_action,
     extract_squats_from_tar,
 )
+from backend.evaluation import plotstyle
 from backend.evaluation.metrics import Accumulator, per_joint_pixel_error
 
 
@@ -146,30 +147,33 @@ ANGLES_OF_INTEREST = {
 
 
 def plot_per_joint(summary, out_path, action="squat"):
+    p = plotstyle.apply()
     joints = [j for j in PENN_JOINTS if summary["per_joint_pixel_error"].get(j) is not None]
     vals = [summary["per_joint_pixel_error"][j] for j in joints]
-    plt.figure(figsize=(10, 4))
-    plt.bar(joints, vals, color="#3b7dd8")
-    plt.ylabel("mean pixel error")
-    plt.title(f"MediaPipe vs Penn Action — per-joint 2D error ({action})")
-    plt.xticks(rotation=45, ha="right")
-    plt.tight_layout()
-    plt.savefig(out_path, dpi=120)
-    plt.close()
+    p.figure(figsize=(10, 4))
+    p.bar(joints, vals, color=plotstyle.PRIMARY)
+    p.ylabel("mean pixel error")
+    p.title(f"MediaPipe vs Penn Action — per-joint 2D error ({action})")
+    p.xticks(rotation=45, ha="right")
+    p.tight_layout()
+    p.savefig(out_path, dpi=plotstyle.DPI)
+    p.close()
 
 
 def plot_angle_hist(all_angle_errs, out_path, action="squat"):
     if not all_angle_errs:
         return
-    plt.figure(figsize=(7, 4))
-    plt.hist(all_angle_errs, bins=30, color="#46a35e", edgecolor="white")
-    plt.xlabel("absolute angle error (degrees)")
-    plt.ylabel("frame count")
+    p = plotstyle.apply()
+    p.figure(figsize=(7, 4))
+    p.hist(all_angle_errs, bins=30, color=plotstyle.PRIMARY,
+           edgecolor=plotstyle.EDGE)
+    p.xlabel("absolute angle error (degrees)")
+    p.ylabel("frame count")
     names = " + ".join(n.capitalize() for n in ANGLES_OF_INTEREST.get(action, ("joint",)))
-    plt.title(f"{names} angle error: MediaPipe vs Penn Action ({action})")
-    plt.tight_layout()
-    plt.savefig(out_path, dpi=120)
-    plt.close()
+    p.title(f"{names} angle error: MediaPipe vs Penn Action ({action})")
+    p.tight_layout()
+    p.savefig(out_path, dpi=plotstyle.DPI)
+    p.close()
 
 
 def main():
@@ -303,6 +307,12 @@ def main():
             "frame_stride": args.frame_stride,
             "aggregate": summary,
             "per_sequence": per_seq,
+            # the raw per-frame errors behind the histogram. Kept because the
+            # summary above cannot reproduce it: restyling fig7 meant re-running
+            # 25 sequences purely to recover numbers that had already been
+            # computed once.
+            "angle_errors_raw": {k: [round(float(x), 4) for x in v]
+                                 for k, v in overall.angle_errors.items()},
         }, fh, indent=2)
 
     plot_per_joint(summary, out_dir / "per_joint_error.png", args.action)
