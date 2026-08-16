@@ -150,6 +150,37 @@ def api_index():
     return JSONResponse(API_INDEX)
 
 
+def _container_memory():
+    """Limit and usage as the container sees them, or None where there is no cgroup.
+
+    /health already answers "am I fully configured" so nobody has to upload a
+    video to find out. It could not answer "am I about to be killed", and that
+    cost the best part of a day: the container was idling at 447 MB of a 1000 MB
+    limit and nothing from outside could see it. The kill arrived as one word in
+    a log, three seconds into an analysis.
+    """
+    for limit_path, usage_path in (
+            ("/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory.current"),
+            ("/sys/fs/cgroup/memory/memory.limit_in_bytes",
+             "/sys/fs/cgroup/memory/memory.usage_in_bytes")):
+        try:
+            raw = Path(limit_path).read_text().strip()
+            usage = int(Path(usage_path).read_text().strip())
+        except (OSError, ValueError):
+            continue
+        # cgroup v2 writes "max" for unlimited; v1 writes a sentinel near 2^63
+        limit = None if raw == "max" else int(raw)
+        if limit is not None and limit > 2 ** 62:
+            limit = None
+        mb = 1024 * 1024
+        return {
+            "limit_mb": None if limit is None else round(limit / mb),
+            "usage_mb": round(usage / mb),
+            "headroom_mb": None if limit is None else round((limit - usage) / mb),
+        }
+    return None
+
+
 @app.get("/health")
 def health():
     """Liveness, plus which of the optional services this deployment actually has.
@@ -171,7 +202,7 @@ def health():
     """
     groq_key = os.environ.get("GROQ_API_KEY") or ""
     has_groq = bool(groq_key.strip())
-    return {
+    body = {
         "status": "ok",
         "services": {
             # what the user would actually get right now, in their terms
@@ -180,6 +211,12 @@ def health():
         },
         "degraded": not has_groq,
     }
+    # Only when there is a cgroup to read. Absent off Linux rather than zeroed,
+    # because a made-up number here is worse than no number.
+    memory = _container_memory()
+    if memory:
+        body["memory"] = memory
+    return body
 
 
 # ---------------------------------------------------------------------------

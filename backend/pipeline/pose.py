@@ -52,6 +52,46 @@ def _model_path(name="full"):
     return p
 
 
+# Longest edge we will analyse or draw on. 1920 is 1080p, which is what both
+# filming guides already tell people to shoot, so the code and the advice finally
+# agree.
+#
+# This is a memory fix before it is a speed one. The container idles at 447 MB of
+# 1000 and a 4K analysis wants roughly 690 MB on top of that, so an iPhone filming
+# at its default setting was a guaranteed kill -- it died three seconds in, before
+# the overlay render was even reached.
+#
+# It costs nothing in accuracy. MediaPipe resizes its input internally, so the
+# extra pixels are discarded before the model ever sees them, and the same clip at
+# three resolutions gave identical rep counts with knee angles inside 0.4 degrees
+# across a 14x pixel range (handoff 19.2). Landmarks are normalised, so an
+# aspect-preserving resize leaves the angle maths untouched.
+#
+# Below the cap this is a no-op and returns the frame it was given, which is why
+# no published number moves: every fixture in the repo is already smaller.
+MAX_ANALYSIS_EDGE = 1920
+
+
+def fit_dims(w, h, max_edge=MAX_ANALYSIS_EDGE):
+    """Target size for a frame, capped on its long edge, aspect preserved."""
+    longest = max(w, h)
+    if longest <= max_edge or longest == 0:
+        return w, h
+    s = max_edge / longest
+    return max(1, int(round(w * s))), max(1, int(round(h * s)))
+
+
+def fit_within(frame, max_edge=MAX_ANALYSIS_EDGE):
+    """The frame, shrunk to fit the cap. Returned untouched when it already does."""
+    h, w = frame.shape[:2]
+    tw, th = fit_dims(w, h, max_edge)
+    if (tw, th) == (w, h):
+        return frame
+    # INTER_AREA is the right one for shrinking; the others alias badly and this
+    # image is about to have a pose estimated off it.
+    return cv2.resize(frame, (tw, th), interpolation=cv2.INTER_AREA)
+
+
 def extract_landmarks(video_path, model="full"):
     """Run MediaPipe PoseLandmarker on every frame.
 
@@ -89,6 +129,7 @@ def extract_landmarks(video_path, model="full"):
             if not ok:
                 break
 
+            frame_bgr = fit_within(frame_bgr)
             rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
             mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
             ts_ms = int(round((frame_idx / fps) * 1000))

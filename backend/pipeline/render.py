@@ -2,7 +2,7 @@
 MediaPipe's drawing helper so per-joint colour control is straightforward."""
 import cv2
 import numpy as np
-from .pose import LM, VISIBILITY_THRESHOLD
+from .pose import LM, VISIBILITY_THRESHOLD, fit_dims, fit_within
 from .encoder import VideoEncoder
 
 
@@ -142,8 +142,11 @@ def render_video(input_path, landmarks_all, angles_all, output_path,
         raise RuntimeError(f"could not open input video: {input_path}")
 
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
-    w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    # Encode at the analysed size, not the source size. A 4K input used to produce
+    # a 4K annotated video, which is expensive to encode and then has to travel
+    # down a phone's mobile connection before anyone can watch it.
+    w, h = fit_dims(int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
+                    int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)))
 
     n = len(landmarks_all)
     flagged_per_frame = flagged_per_frame or [set()] * n
@@ -154,6 +157,7 @@ def render_video(input_path, landmarks_all, angles_all, output_path,
             ok, frame = cap.read()
             if not ok or i >= n:
                 break
+            frame = fit_within(frame)
             ang = angles_all[i]
             # the caption names joints, so the exercise supplies it -- see
             # squat.frame_caption / pushup.frame_caption
@@ -195,7 +199,9 @@ def read_frames_exact(input_path, indices):
         if not ok:
             break
         if i in remaining:
-            out[i] = frame.copy()
+            # capped like everything else, so a key frame matches the video it
+            # was taken from
+            out[i] = fit_within(frame).copy()
             remaining.discard(i)
         i += 1
     cap.release()
