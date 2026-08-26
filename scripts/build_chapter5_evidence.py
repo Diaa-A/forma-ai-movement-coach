@@ -238,9 +238,9 @@ def publish_faithfulness():
     The harness writes to `data/outputs/`, which is gitignored, so a copy has to
     be published under `report/` to be citable at all. That copy had already gone
     stale once — a partial 20-generation run from 4 August sat in `report/` while
-    a complete 72-generation run sat in `data/outputs/`, and the report agent read
-    the stale one. Republishing from a single command is the fix; two hand-copied
-    files is what caused it.
+    a complete 72-generation run sat in `data/outputs/`, and the stale one was
+    the one that got cited. Republishing from a single command is the fix; two
+    hand-copied files is what caused it.
 
     The summary is regenerated rather than copied, so a change to `format_table`
     reaches the published artefact without burning provider quota on a rerun.
