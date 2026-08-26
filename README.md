@@ -18,9 +18,9 @@ the way it is.
 | C — two-layer coaching (Layer 1 deterministic cue evaluator + Layer 2 Groq LLM, with dry-run fallback) | done; live (Groq key in `.env`) |
 | D — voice transcription (Groq `whisper-large-v3` default, local `openai-whisper` fallback) | done; live |
 | E — FastAPI server with `/analyze` multipart endpoint | done |
-| F — PWA frontend | not started — critical path |
-| G — push-up / pull-up analysers | not started |
-| H — Penn Action evaluation harness | done (squat subset — see `data\outputs\penn_eval\`) |
+| F — PWA frontend | done; deployed on Railway and installable on iOS |
+| G — push-up / pull-up analysers | push-up done and benchmarked; pull-up not started (WP-08) |
+| H — Penn Action evaluation harness | done, squat and push-up — results in `report/chapter5/` |
 
 ## Quick start
 
@@ -92,7 +92,7 @@ Returns JSON with URLs to artefacts served from `/results/<job_id>/`.
 PY -m pytest
 ```
 
-142 tests: angle maths vs known geometry, One Euro behaviour, phase detection on
+202 tests: angle maths vs known geometry, One Euro behaviour, phase detection on
 synthetic signals, rep filter, cue gating, the API's rejection branches, and an
 end-to-end smoke test (the tests that need `data/test_videos/` skip themselves on
 a clean checkout, where test videos are gitignored — a skip there is expected,
@@ -160,10 +160,10 @@ Per-frame inference dominates and does not get cheaper on a warm container.
   `/results/...` URL a participant still has open stops working. Do not redeploy
   mid-session. This is not the deletion guarantee either — that is WP-07, and it
   has to ship before anyone is asked to consent to it.
-- **Concurrency is capped at 6** in the container start command. One analysis
-  peaks at 237 MB and `/analyze` is a sync handler, so the default threadpool of
-  40 would be several gigabytes under load. Past six, requests get a 503, which
-  the app renders as a retryable server error.
+- **One analysis runs at a time** (`MAX_CONCURRENT_ANALYSES`, default 1). The
+  container has 954 MB and one analysis peaks at 238–774 MB depending on input
+  resolution, so two of anything large will not fit. Past the limit, requests get
+  a 503, which the app renders as a retryable server error.
 
 ## Setup
 
@@ -250,7 +250,7 @@ Groq-hosted `whisper-large-v3` (Decision 22). This is the offline fallback only.
 │   │   ├── base.py            ExerciseProfile — camera-view / plane gating
 │   │   ├── squat.py           form scoring + side selection + worst/best
 │   │   └── squat_cues.py      Layer 1 — cue database + evaluator
-│   └── tests/                 142 pytest tests
+│   └── tests/                 202 pytest tests
 ├── frontend/                  the PWA (React + Vite); built output is served by FastAPI
 │   ├── public/                manifest, service worker, icons
 │   └── src/
