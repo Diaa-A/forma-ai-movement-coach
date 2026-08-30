@@ -585,3 +585,62 @@ def test_the_serialised_cue_keys_are_exactly_what_readers_expect():
     for key in ("flag", "severity", "fault", "fix", "rep_indices"):
         assert f'"{key}":' in block, f'cue key "{key}" is missing or misspelled'
         assert f'" {key}"' not in block, f'cue key "{key}" has a leading space'
+
+
+# ---------------------------------------------------------------------------
+# denying the desired state is agreement, not contradiction
+# ---------------------------------------------------------------------------
+# Found 30 Aug, when Groq retired llama-3.3-70b and the harness was re-run
+# against gpt-oss-120b. The rate came back 72.6% against 98.8%, and eleven of
+# the seventeen violations were one sentence repeated: "your hips sagged below
+# the straight line from shoulders to heels", flagged as contradicting the
+# hips_sagging cue it was faithfully restating. The contradiction patterns name
+# the DESIRED state, and a fault asserted by denial contains it.
+#
+# 18.3 fixed the half that came from corrective cues by scoring assertions only.
+# This is the other half. It survived three weeks because the previous model did
+# not phrase faults this way -- the substitution exposed the instrument, not the
+# system.
+
+SAG = CueHit(
+    flag="hips_sagging", severity="primary",
+    fault="the hips dropped below the line from shoulders to heels.",
+    fix="Squeeze the glutes and brace so the body holds one line.",
+    joints=["left_hip"], rep_indices=[0],
+)
+
+
+def test_restating_a_fault_by_denying_the_good_state_is_not_a_contradiction():
+    auth = F.authorised_from(evaluation(cues=[SAG], exercise="pushup"))
+    r = report(primary_issue=("Your hips sagged below the straight line from "
+                              "shoulders to heels."))
+    # about contradictions specifically: this minimal payload authorises no
+    # vocabulary beyond the cue, so an un-cued term here would be the fixture's
+    # doing rather than the rule under test
+    assert [v.kind for v in F.check(r, auth) if v.kind == "contradicted"] == []
+
+
+def test_a_negated_tempo_claim_is_not_a_contradiction():
+    fast = CueHit(flag="fast_descent", severity="secondary",
+                  fault="the descent was quicker than a controlled tempo.",
+                  fix="Take about two seconds on the way down.")
+    auth = F.authorised_from(evaluation(cues=[fast]))
+    r = report(primary_issue="You descended too fast, not maintaining a controlled tempo.")
+    assert F.check(r, auth) == []
+
+
+def test_claiming_the_good_state_outright_is_still_a_contradiction():
+    """The fix must not blind the check — this is the failure it exists to catch."""
+    auth = F.authorised_from(evaluation(cues=[SHALLOW]))
+    r = report(primary_issue="You reached full depth on every rep.")
+    kinds = [v.kind for v in F.check(r, auth)]
+    assert "contradicted" in kinds
+
+
+def test_a_negation_in_an_earlier_sentence_does_not_excuse_a_later_claim():
+    """The window stops at clause boundaries, so an unrelated 'not' upstream
+    cannot suppress a genuine contradiction downstream."""
+    auth = F.authorised_from(evaluation(cues=[SHALLOW]))
+    r = report(primary_issue="Not every rep was even. You reached full depth.")
+    kinds = [v.kind for v in F.check(r, auth)]
+    assert "contradicted" in kinds

@@ -233,6 +233,33 @@ def authorised_from(evaluation: Evaluation, voice_transcript: str = "") -> Autho
 # invention -- a different and arguably worse failure, since it tells the user
 # the opposite of the finding.
 
+# A contradiction pattern names the DESIRED state, so it also appears inside any
+# sentence that asserts the fault by denying it: "not maintaining a controlled
+# tempo", "you're not reaching full depth", "hips sagged below the straight line
+# from shoulders to heels". Those agree with the cue; flagging them inverts the
+# measurement.
+#
+# 18.3 fixed the half of this that came from corrective cues by scoring
+# assertions only. This is the other half, and it stayed hidden for three weeks
+# because llama-3.3-70b did not phrase faults that way. Substituting
+# gpt-oss-120b after the provider retired that model produced 11 identical false
+# violations on one case and took the headline from 98% to 73% -- a model change
+# exposing a latent flaw in the instrument rather than in the system.
+#
+# The window is bounded and must not cross a clause end, so "you hit depth. Not
+# every rep was even" does not suppress a genuine contradiction in the first
+# sentence.
+_NEGATED_BEFORE = re.compile(
+    r"(\bnot\b|n't\b|\bnever\b|\bwithout\b|\black\w*|\bfail\w+ to\b"
+    r"|\binstead of\b|\brather than\b|\bshort of\b|\bsagg\w*|\bpik\w*"
+    r"|\bdropp?\w*|\bfell\b|\bbelow\b)[^.;!?]{0,40}$")
+
+
+def _is_negated(text: str, at: int) -> bool:
+    """True when the desired-state phrase at `at` is being denied rather than claimed."""
+    return bool(_NEGATED_BEFORE.search(text[:at]))
+
+
 CONTRADICTIONS: Dict[str, str] = {
     "shallow_depth": r"(full depth|good depth|deep enough|below parallel|reached depth|nice and deep|great depth)",
     "excessive_forward_lean": r"(torso (stayed|remained) upright|chest stayed up|upright throughout|kept your chest up well|back stayed vertical)",
@@ -350,9 +377,11 @@ def check(report: coaching.CoachingReport, auth: Authorised) -> List[Violation]:
         if not pattern:
             continue
         for sentence in sections.assertions + sections.answer:
-            if re.search(pattern, _norm(sentence)):
-                violations.append(Violation(
-                    "contradicted", f"contradicts the fired cue '{flag}'", sentence))
+            m = re.search(pattern, _norm(sentence))
+            if not m or _is_negated(_norm(sentence), m.start()):
+                continue
+            violations.append(Violation(
+                "contradicted", f"contradicts the fired cue '{flag}'", sentence))
 
     # 4. body parts / faults Layer 1 never mentioned -- anywhere, since inventing
     # a joint in a corrective cue is still inventing it

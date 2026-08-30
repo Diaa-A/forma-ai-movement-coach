@@ -232,6 +232,43 @@ def table(d: dict) -> str:
 FAITHFULNESS_SRC = ROOT / "data" / "outputs" / "faithfulness"
 
 
+
+def publish_labelled_faithfulness_runs():
+    """Publish every labelled run beside the main one, model by model.
+
+    There is more than one measurement now and they are not interchangeable.
+    Groq retired llama-3.3-70b-versatile on about 26 August, so the published
+    98.8% describes a model nobody can reach any more, while the deployment runs
+    something else. Overwriting the old file would delete a real measurement to
+    make room for a different one; publishing both, named by model, lets the
+    chapter say which number belongs to which system.
+
+    Prefers a `_rescored` file where one exists: when the checker is corrected,
+    the stored generations are re-scored offline rather than recollected, and the
+    corrected verdict is the one worth citing.
+    """
+    from backend.evaluation import faithfulness as F
+
+    seen = set()
+    for src in sorted(FAITHFULNESS_SRC.glob("results_*.json")):
+        stem = src.stem[len("results_"):]
+        label = stem[: -len("_rescored")] if stem.endswith("_rescored") else stem
+        rescored = FAITHFULNESS_SRC / f"results_{label}_rescored.json"
+        chosen = rescored if rescored.is_file() else src
+        if label in seen:
+            continue
+        seen.add(label)
+
+        summary = json.loads(chosen.read_text(encoding="utf-8"))
+        summary["method_limits"] = F.method_limits(summary)
+        (OUT / f"faithfulness_results_{label}.json").write_text(
+            json.dumps(summary, indent=2), encoding="utf-8")
+        (OUT / f"faithfulness_summary_{label}.txt").write_text(
+            F.format_table(summary) + '\n', encoding="utf-8")
+        print(f"[+] faithfulness ({label}) from {chosen.name}: "
+              f"{summary.get('faithfulness_rate', 0):.1%}")
+
+
 def publish_faithfulness():
     """Copy the faithfulness run into report/ and rebuild its summary.
 
@@ -251,6 +288,8 @@ def publish_faithfulness():
     in the file it was sitting in. Measured counts are copied untouched — only
     the prose derived from them is rebuilt.
     """
+    publish_labelled_faithfulness_runs()
+
     src = FAITHFULNESS_SRC / "results.json"
     if not src.is_file():
         print(f"[!] no faithfulness run at {src.relative_to(ROOT)} — skipping")
