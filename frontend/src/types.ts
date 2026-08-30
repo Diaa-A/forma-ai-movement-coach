@@ -2,7 +2,7 @@
 // no codegen step here, and the field that will bite you is an optional one that
 // the UI quietly renders as empty.
 
-export type AnalysisStatus = 'ok' | 'no_reps' | 'low_detection'
+export type AnalysisStatus = 'ok' | 'no_reps' | 'low_detection' | 'rotated'
 
 /** Where the coaching prose came from. Surfaced in the UI, not just logged —
  *  the user should know when they're reading the system's own wording rather
@@ -47,6 +47,10 @@ export interface Limits {
 export interface Catalog {
   exercises: Exercise[]
   limits: Limits
+  /** set only while a user-testing round is running. May carry a {job_id}
+   *  placeholder for the results screen to fill in, so a form response joins to
+   *  the exact analysis the participant saw. */
+  feedback_form_url?: string | null
 }
 
 export interface KeyFrame {

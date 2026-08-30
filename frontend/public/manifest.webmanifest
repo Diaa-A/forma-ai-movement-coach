@@ -1,14 +1,17 @@
 {
-  "name": "Form Coach — movement feedback",
-  "short_name": "Form Coach",
+  "name": "Forma — movement feedback",
+  "short_name": "Forma",
   "description": "Upload a short clip of your set and get coaching on your form.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#12161c",
-  "theme_color": "#12161c",
-  "categories": ["health", "fitness"],
+  "background_color": "#10141a",
+  "theme_color": "#10141a",
+  "categories": [
+    "health",
+    "fitness"
+  ],
   "icons": [
     {
       "src": "/icons/icon-192.png",

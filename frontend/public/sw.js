@@ -14,6 +14,12 @@
      hashed assets   cache first. The filename changes when the content does, so
                      a cached one is never stale.
      icons/manifest  cache first, stale is fine.
+     fonts           cache first, and precached, because a display face that
+                     arrives late is a layout shift and one that never arrives
+                     offline is a shift on every cold start. The filename carries
+                     a content hash for the same reason the hashed assets do —
+                     public/ is copied verbatim, so Vite doesn't hash it and the
+                     build id below wouldn't change for a font-only edit.
      /exercises      not cached. Filming guidance that's quietly out of date is
                      worse than a spinner, and the app already carries its own
                      fallback for when this call fails.
@@ -36,6 +42,10 @@
 // survivable during a testing round, where the entire point is shipping fixes
 // between Round 1 and Round 2 to people who already installed it.
 const VERSION = '__BUILD_ID__'
+// Still 'formcoach-' after the rename to Forma, on purpose. These names are
+// invisible to users, and the activate handler deletes by this exact prefix — a
+// rename would leave the caches on every phone that installed the app during a
+// testing round orphaned, with nothing left that matches to clean them up.
 const SHELL_CACHE = `formcoach-shell-${VERSION}`
 const ASSET_CACHE = `formcoach-assets-${VERSION}`
 const KEEP = [SHELL_CACHE, ASSET_CACHE]
@@ -47,6 +57,10 @@ const SHELL = [
   '/manifest.webmanifest',
   '/icons/icon-192.png',
   '/icons/apple-touch-icon.png',
+  // precached rather than left to first request: the heading font is what the
+  // no-layout-shift work in styles.css depends on, and offline it would never
+  // arrive at all
+  '/fonts/space-grotesk-var-336df680.woff2',
 ]
 
 self.addEventListener('install', (event) => {
@@ -89,6 +103,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (url.pathname.startsWith('/assets/') || url.pathname.startsWith('/icons/')
+      || url.pathname.startsWith('/fonts/')
       || url.pathname === '/manifest.webmanifest') {
     event.respondWith(cacheFirst(request, ASSET_CACHE))
   }

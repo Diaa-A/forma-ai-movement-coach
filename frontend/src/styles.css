@@ -1,21 +1,152 @@
 /* One stylesheet, custom properties for the palette. No framework — there are
    about fifteen components here and the config needed to avoid writing this
-   would be longer than the CSS itself. */
+   would be longer than the CSS itself.
 
+   Palette derivation, contrast measurements and the reasoning behind every
+   number below: docs/UI_DESIGN_PLAN.md. */
+
+/* ---- fonts ---------------------------------------------------------- */
+
+/* Self-hosted, not a CDN. The app is same-origin by design — FastAPI serves
+   dist/ at /, there's no CORS in production, and the service worker registers
+   because service workers are same-origin only. Pulling a display face off
+   fonts.gstatic.com would put a second origin into that story.
+
+   The hash in the filename is load-bearing. public/ is copied verbatim by Vite
+   (no content hashing), and the service worker's build id comes from the
+   assets/* filenames in index.html — so a font-only change would leave the id,
+   and therefore the cache name, identical, and cacheFirst would serve the old
+   file until the user deleted the app. Same failure the 'v1' version string
+   caused; see the note at the top of sw.js. A new font means a new URL. */
+@font-face {
+  font-family: "Space Grotesk Variable";
+  src: url("/fonts/space-grotesk-var-336df680.woff2") format("woff2");
+  font-weight: 300 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Metric-matched stand-ins for the swap window, so replacing the fallback with
+   the real face doesn't reflow the heading.
+
+   There are two of them, and the reason is a measurement that went against
+   expectation. The first version used one face, with size-adjust derived from
+   the average advance width over a flat [A-Za-z0-9 .,'-?!] sample: 0.56235 em
+   for Space Grotesk against 0.55208 for Arial, so 101.86%. Rendering the actual
+   heading strings through it closed only 1.7 points of a 7.7% width gap.
+
+   Summing advances over the real heading text instead — every h1, h2 and h3
+   string in this app — says why. Mixed-case headings need 109.96%, because
+   Space Grotesk's lowercase is about a tenth wider than Arial's. The h3 labels
+   are uppercased by CSS and need 91.44%, because its capitals are about a tenth
+   narrower. A flat character sample averages those two into 101.86%, which is a
+   plausible-looking number that is wrong for every string the app renders.
+
+   Donor is Arial: it needs less adjustment than Segoe UI did, and Helvetica on
+   iOS and macOS shares its advance widths.
+
+   Not verified on Android, where local("Arial") usually resolves through the
+   system alias to Roboto and these numbers would be applied to the wrong donor.
+   Where none of the three names resolve the rule contributes nothing and the
+   stack falls through to the system font, which is today's behaviour — so the
+   failure mode is "no improvement", not "worse". */
+@font-face {
+  font-family: "Forma Display Fallback";
+  src: local("Arial"), local("Helvetica Neue"), local("Helvetica");
+  size-adjust: 109.96%;
+  ascent-override: 89.49%;
+  descent-override: 26.56%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: "Forma Label Fallback";
+  src: local("Arial"), local("Helvetica Neue"), local("Helvetica");
+  size-adjust: 91.44%;
+  ascent-override: 107.61%;
+  descent-override: 31.93%;
+  line-gap-override: 0%;
+}
+
+/* ---- tokens --------------------------------------------------------- */
+
+/* Every colour is declared twice: a hex that every browser parses, then the
+   OKLCH the hex was generated from, which replaces it wherever oklch() is
+   understood (Safari 15.4+, Chrome 111+). An unparseable declaration is
+   dropped, so the older browsers simply keep the line above.
+
+   The palette is defined in OKLCH rather than picked in hex because the
+   previous hand-picked one had four tokens between 2.03 and 3.04 against their
+   own background in the light scheme, and nobody noticed — you can't see a
+   contrast ratio by looking at a hex triplet. */
 :root {
-  --bg: #12161c;
-  --surface: #1a2029;
-  --surface-2: #222a35;
-  --line: #2e3846;
-  --text: #e8edf4;
-  --text-dim: #9aa7b8;
+  /* neutrals: even 0.05 steps of OKLCH lightness at hue 258 */
+  --bg:          #10141a;
+  --bg:          oklch(0.190 0.014 258);
+  --surface:     #1a2027;
+  --surface:     oklch(0.240 0.017 258);
+  --surface-2:   #252c35;
+  --surface-2:   oklch(0.290 0.020 258);
+  --line:        #313844;
+  --line:        oklch(0.340 0.023 258);
+  /* control borders only. --line is 1.39 against --surface, which is fine for a
+     decorative rule and short of the 3:1 WCAG 1.4.11 wants on the boundary of
+     something you can press. This one measures 3.22. */
+  --line-strong: #5c6776;
+  --line-strong: oklch(0.510 0.028 258);
+  --text-dim:    #9aa6b7;
+  --text-dim:    oklch(0.720 0.028 258);
+  --text:        #eaeff5;
+  --text:        oklch(0.950 0.010 258);
 
-  --accent: #4da3ff;
-  --good: #46c07a;
-  --warn: #e2a33c;
-  --bad: #e2685f;
+  /* Accent and the three semantic colours share one lightness, so hue is the
+     only variable carrying meaning. Hue 270 is the value that maximises the
+     minimum distance to bad (26), warn (76) and good (155) — 115.4 degrees.
+     Cyan was the first instinct and is rejected: it lands 45 degrees from the
+     green that means "this joint is fine", and red on the overlay meaning "this
+     joint is at fault" is the one distinction this app cannot blur. */
+  --accent:      #8ba6fc;
+  --accent:      oklch(0.740 0.128 270);
+  --accent-ink:  #0c111f;
+  --accent-ink:  oklch(0.180 0.030 270);
+  --good:        #46c77e;
+  --good:        oklch(0.740 0.155 154.6);
+  --warn:        #e09c1f;
+  --warn:        oklch(0.740 0.148 75.8);
+  --bad:         #fc8177;
+  --bad:         oklch(0.740 0.152 26.3);
+  --bad-ink:     #200a08;
+  --bad-ink:     oklch(0.180 0.040 26.3);
+  --focus:       #d2ddfe;
+  --focus:       oklch(0.900 0.046 270);
+
+  /* Banner washes stay translucent rather than flattened: .banner-info renders
+     inside a .card in VoiceNote and on the page background everywhere else. */
+  --tint-accent: rgba(139, 166, 252, 0.14);
+  --tint-good:   rgba(70, 199, 126, 0.14);
+  --tint-warn:   rgba(224, 156, 31, 0.14);
+  --tint-bad:    rgba(252, 129, 119, 0.14);
+
+  /* type: modular scale, base 16px, ratio 1.2. Four steps, because four is all
+     this app needed. */
+  --font-body:    system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* two stacks off one font file — they differ only in which metric-matched
+     fallback stands in during the swap, for the reason in the @font-face note */
+  --font-display: "Space Grotesk Variable", "Forma Display Fallback", var(--font-body);
+  --font-label:   "Space Grotesk Variable", "Forma Label Fallback", var(--font-body);
+  --step--1: 0.833rem;
+  --step-0:  1rem;
+  --step-1:  1.2rem;
+  --step-2:  1.44rem;
+
+  /* motion. One easing curve: things arrive decelerating, and nothing in this
+     app leaves the screen in a way worth narrating. */
+  --dur-quick: 120ms;
+  --dur-base:  200ms;
+  --ease-out:  cubic-bezier(0.2, 0, 0, 1);
 
   --radius: 12px;
+  --radius-sm: 8px;
   --gap: 16px;
   --max-width: 620px;
 
@@ -24,14 +155,60 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+/* The light scheme overrides all fourteen colours, not just the six neutrals.
+   Leaving accent/good/warn/bad at their dark values is what put them at 2.43,
+   2.14, 2.03 and 3.04 against the light background — every one of them is used
+   as text somewhere, and every one of them failed AA. */
 @media (prefers-color-scheme: light) {
   :root {
-    --bg: #f4f6f9;
-    --surface: #ffffff;
-    --surface-2: #eef1f6;
-    --line: #d9dfe8;
-    --text: #171d26;
-    --text-dim: #5b6675;
+    /* The semantic family sits at L 0.450 here against 0.740 in dark, and it is
+       not symmetric on purpose. Light backgrounds are close together — white,
+       0.965 and 0.930 — so a colour has to go a good deal darker to clear 4.5
+       against all of them AND against the eight tint-over-base combinations a
+       banner can produce. 0.480 left --good at 4.33 on its own tint. 0.450
+       leaves the worst pair in the whole light scheme at 4.95.
+
+       the rank inverts too: a card is now the lightest thing on screen so it
+       still lifts off the page, with --bg one step below it */
+    --surface:     #ffffff;
+    --surface:     oklch(1.000 0.000 258);
+    --bg:          #f1f4f8;
+    --bg:          oklch(0.965 0.006 258);
+    --surface-2:   #e5e8ed;
+    --surface-2:   oklch(0.930 0.008 258);
+    --line:        #d2d6dd;
+    --line:        oklch(0.875 0.010 258);
+    --line-strong: #828a96;
+    --line-strong: oklch(0.630 0.020 258);
+    /* 0.505 first time round, which measured 4.13 against --text-dim on a
+       --tint-bad banner — the pairing my own contrast table missed, because it
+       only checked --text on the tints. Lighthouse found it on the install bar.
+       0.480 clears 4.5 on every background including all eight tint-over-base
+       combinations. */
+    --text-dim:    #565e6a;
+    --text-dim:    oklch(0.480 0.022 258);
+    --text:        #1b2027;
+    --text:        oklch(0.240 0.016 258);
+
+    --accent:      #2f40c2;
+    --accent:      oklch(0.450 0.200 270);
+    --accent-ink:  #f7f8fd;
+    --accent-ink:  oklch(0.980 0.006 270);
+    --good:        #086639;
+    --good:        oklch(0.450 0.109 154.6);
+    --warn:        #724d08;
+    --warn:        oklch(0.450 0.091 75.8);
+    --bad:         #a10c16;
+    --bad:         oklch(0.450 0.177 26.3);
+    --bad-ink:     #fcf7f6;
+    --bad-ink:     oklch(0.980 0.006 26.3);
+    --focus:       #2833bd;
+    --focus:       oklch(0.420 0.210 270);
+
+    --tint-accent: rgba(47, 64, 194, 0.14);
+    --tint-good:   rgba(8, 102, 57, 0.14);
+    --tint-warn:   rgba(114, 77, 8, 0.14);
+    --tint-bad:    rgba(161, 12, 22, 0.14);
   }
 }
 
@@ -41,7 +218,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font: var(--step-0)/1.55 var(--font-body);
   /* stops iOS bumping text up a size in landscape */
   -webkit-text-size-adjust: 100%;
 }
@@ -52,17 +229,37 @@ body {
   padding: calc(var(--safe-top) + 20px) 18px calc(var(--safe-bottom) + 32px);
 }
 
-h1 { font-size: 1.45rem; margin: 0 0 6px; letter-spacing: -0.01em; }
-h2 { font-size: 1.1rem;  margin: 0 0 10px; }
-h3 { font-size: 0.82rem; margin: 0 0 8px; text-transform: uppercase;
+h1, h2 { font-family: var(--font-display); }
+
+h1 { font-size: var(--step-2); margin: 0 0 6px; letter-spacing: -0.01em; }
+/* 1.1rem before. This is the status-banner heading — the sentence that has to
+   be read first when a clip could not be analysed — so it gets the extra step. */
+h2 { font-size: var(--step-1);  margin: 0 0 10px; letter-spacing: -0.005em; }
+/* uppercased, so it takes the label stack rather than the display one */
+h3 { font-family: var(--font-label);
+     font-size: var(--step--1); margin: 0 0 8px; text-transform: uppercase;
      letter-spacing: 0.07em; color: var(--text-dim); font-weight: 600; }
 p  { margin: 0 0 12px; }
 ul { margin: 0 0 12px; padding-left: 20px; }
 li { margin-bottom: 6px; }
 
 .muted { color: var(--text-dim); }
-.small { font-size: 0.85rem; }
+.small { font-size: var(--step--1); }
 .stack > * + * { margin-top: var(--gap); }
+
+/* ---- focus ---------------------------------------------------------- */
+
+/* Added, never subtracted. There is no `outline: none` in this file, so a
+   browser without :focus-visible keeps its own focus ring rather than ending up
+   with none — which is what resetting :focus and re-adding it here would do.
+
+   The 2px offset is not cosmetic. The ring against the accent fill measures
+   1.73; against the page background it sits between it and the button, it
+   measures 13.64. The offset is what makes it legible on a primary button. */
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
 
 /* ---- cards ---------------------------------------------------------- */
 
@@ -75,6 +272,31 @@ li { margin-bottom: 6px; }
 
 .card-tight { padding: 12px 14px; }
 
+/* ---- masthead ------------------------------------------------------- */
+
+/* The app name appeared nowhere on screen before this — only in the title bar
+   and the manifest, which nobody reads. Deliberately quieter than the screen
+   h1: it is a persistent strip on all six screens, not a headline, and a
+   wordmark larger than the page heading would invert the hierarchy everywhere
+   to serve the brand nowhere. */
+.masthead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 22px;
+  color: var(--text-dim);
+}
+
+.masthead-mark { flex: none; display: block; }
+
+.wordmark {
+  font-family: var(--font-display);
+  font-size: var(--step-0);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
 /* ---- buttons -------------------------------------------------------- */
 
 .btn {
@@ -82,7 +304,7 @@ li { margin-bottom: 6px; }
   width: 100%;
   padding: 14px 16px;
   border-radius: var(--radius);
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   background: var(--surface-2);
   color: var(--text);
   font: inherit;
@@ -91,15 +313,18 @@ li { margin-bottom: 6px; }
   cursor: pointer;
   /* 44px is the smallest thing you can reliably hit with a thumb */
   min-height: 48px;
+  transition: transform var(--dur-quick) var(--ease-out),
+              background-color var(--dur-quick) var(--ease-out),
+              border-color var(--dur-quick) var(--ease-out);
 }
 
 .btn:active { transform: translateY(1px); }
-.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
 .btn-primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #08121d;
+  color: var(--accent-ink);
 }
 
 .btn-quiet {
@@ -124,7 +349,7 @@ li { margin-bottom: 6px; }
 
 .exercise-btn .view {
   font-weight: 400;
-  font-size: 0.85rem;
+  font-size: var(--step--1);
   color: var(--text-dim);
 }
 
@@ -137,25 +362,26 @@ li { margin-bottom: 6px; }
   border-left-width: 4px;
 }
 
-.banner-warn { background: rgba(226, 163, 60, 0.12); border-color: var(--warn); }
-.banner-bad  { background: rgba(226, 104, 95, 0.12); border-color: var(--bad); }
-.banner-info { background: rgba(77, 163, 255, 0.10); border-color: var(--accent); }
+.banner-warn { background: var(--tint-warn); border-color: var(--warn); }
+.banner-bad  { background: var(--tint-bad);  border-color: var(--bad); }
+.banner-info { background: var(--tint-accent); border-color: var(--accent); }
 .banner h2 { margin-bottom: 4px; }
 
 /* The not-medical-advice line. Always present, never dismissible — it is a
-   condition of the project, not a nag we can decide to hide later. */
+   condition of the project, not a nag we can decide to hide later. Was 0.78rem,
+   which made the one legally-loaded sentence the smallest text in the app. */
 .disclaimer {
   margin-top: 26px;
   padding-top: 14px;
   border-top: 1px solid var(--line);
-  font-size: 0.78rem;
+  font-size: var(--step--1);
   color: var(--text-dim);
 }
 
 /* ---- filming guide -------------------------------------------------- */
 
 .guide-quote {
-  font-size: 1.05rem;
+  font-size: var(--step-1);
   line-height: 1.5;
   margin: 0;
 }
@@ -172,6 +398,19 @@ li { margin-bottom: 6px; }
 .plane-list .tick { color: var(--good); font-weight: 700; }
 .plane-list .cross { color: var(--text-dim); font-weight: 700; }
 
+/* ---- consent -------------------------------------------------------- */
+
+.consent-list { list-style: none; padding: 0; margin: 0; }
+.consent-list li {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+  line-height: 1.45;
+}
+.consent-list li:last-child { border-bottom: 0; }
+
+/* the feedback-form link is an <a> wearing the button class */
+a.btn { text-decoration: none; }
+
 /* ---- form controls -------------------------------------------------- */
 
 .textarea {
@@ -179,7 +418,7 @@ li { margin-bottom: 6px; }
   margin-top: 10px;
   padding: 11px 12px;
   border-radius: var(--radius);
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   background: var(--bg);
   color: var(--text);
   font: inherit;
@@ -196,7 +435,7 @@ li { margin-bottom: 6px; }
   cursor: pointer;
 }
 
-.btn-bad { background: var(--bad); border-color: var(--bad); color: #1a0d0c; }
+.btn-bad { background: var(--bad); border-color: var(--bad); color: var(--bad-ink); }
 
 /* ---- upload progress ------------------------------------------------ */
 
@@ -231,6 +470,8 @@ li { margin-bottom: 6px; }
   padding: 6px 0;
   color: var(--text-dim);
   opacity: 0.55;
+  transition: opacity var(--dur-base) var(--ease-out),
+              color var(--dur-base) var(--ease-out);
 }
 
 .stage-list li.done   { opacity: 1; }
@@ -304,7 +545,7 @@ li { margin-bottom: 6px; }
   border: 1px solid var(--accent);
   border-radius: var(--radius);
   padding: 12px 14px;
-  background: rgba(77, 163, 255, 0.08);
+  background: var(--tint-accent);
 }
 
 .install-bar-row {
@@ -330,3 +571,38 @@ li { margin-bottom: 6px; }
 }
 
 .install-steps li { margin-bottom: 4px; }
+
+/* ---- view transitions ----------------------------------------------- */
+
+/* Garnish on a state change that already worked. Where the API is absent the
+   screen swaps exactly as it did before — see navigate() in App.tsx, which
+   skips the call entirely rather than relying on these rules. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: var(--dur-base);
+  animation-timing-function: var(--ease-out);
+}
+
+/* The masthead is the one fixed thing on screen. Without its own name it gets
+   captured in the root snapshot and cross-fades with the content under it,
+   which makes it flicker on every navigation. */
+.masthead { view-transition-name: masthead; }
+
+::view-transition-old(masthead),
+::view-transition-new(masthead) {
+  animation: none;
+}
+
+/* ---- reduced motion -------------------------------------------------- */
+
+/* The JS side does its own check as well: view transitions are skipped rather
+   than shortened, and the results stagger doesn't run at all. This block is the
+   backstop for anything driven purely by CSS. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

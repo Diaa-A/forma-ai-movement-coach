@@ -2,23 +2,32 @@ import { useEffect, useReducer, useRef } from 'react'
 import { analyze, fetchCatalog } from './api'
 import type { AnalyzeResponse, ApiError, Exercise, Limits } from './types'
 import { FALLBACK } from './validation'
+import { consentGiven, recordConsent } from './consent'
 import { useOnline } from './useOnline'
+import { buzzOnResult, withViewTransition } from './motion'
 import Disclaimer from './components/Disclaimer'
 import ErrorPanel from './components/ErrorPanel'
 import InstallPrompt from './components/InstallPrompt'
+import Masthead from './components/Masthead'
 import OfflineNotice from './components/OfflineNotice'
 import ExerciseSelect from './screens/ExerciseSelect'
 import FilmingGuide from './screens/FilmingGuide'
+import Consent from './screens/Consent'
 import Capture from './screens/Capture'
 import Processing from './screens/Processing'
 import Results from './screens/Results'
 
-// Five screens, no deep links, no back/forward requirement — so `screen` is a
+// Six screens, no deep links, no back/forward requirement — so `screen` is a
 // field in the reducer rather than a router. A router here would be a dependency
 // added to model a state machine we already have. The cost is that the phone's
 // back button doesn't step through screens; every screen carries its own back
 // control instead.
-type Screen = 'select' | 'guide' | 'capture' | 'processing' | 'results' | 'error'
+//
+// 'consent' sits between the guide and capture: after the exercise is chosen,
+// before anything can be recorded — the last point at which nothing has been
+// uploaded. It is skipped once accepted (remembered per device, re-shown if the
+// retention period changes), so the common path stays five screens long.
+type Screen = 'select' | 'guide' | 'consent' | 'capture' | 'processing' | 'results' | 'error'
 
 interface Submission {
   video: File
@@ -31,6 +40,7 @@ interface State {
   exercises: Exercise[]
   limits: Limits
   exercisesFailed: boolean
+  feedbackFormUrl: string | null
   chosen: Exercise | null
   submission: Submission | null
   uploadFraction: number
@@ -42,7 +52,8 @@ interface State {
 }
 
 type Action =
-  | { type: 'exercises-loaded'; exercises: Exercise[]; limits: Limits }
+  | { type: 'exercises-loaded'; exercises: Exercise[]; limits: Limits;
+      feedbackFormUrl: string | null }
   | { type: 'exercises-failed' }
   | { type: 'pick'; exercise: Exercise }
   | { type: 'to'; screen: Screen }
@@ -60,6 +71,7 @@ const initial: State = {
   // the checks still run, so a file is never sent off unchecked
   limits: FALLBACK,
   exercisesFailed: false,
+  feedbackFormUrl: null,
   chosen: null,
   submission: null,
   uploadFraction: 0,
@@ -88,7 +100,7 @@ function reducer(state: State, action: Action): State {
   switch (action.type) {
     case 'exercises-loaded':
       return { ...state, exercises: action.exercises, limits: action.limits,
-               exercisesFailed: false }
+               feedbackFormUrl: action.feedbackFormUrl, exercisesFailed: false }
     case 'exercises-failed':
       // keep whatever limits we have; FALLBACK is already the initial value
       return { ...state, exercises: OFFLINE_FALLBACK, exercisesFailed: true }
@@ -124,6 +136,7 @@ function reducer(state: State, action: Action): State {
     case 'restart':
       // keep the loaded catalogue, drop everything about the last run
       return { ...initial, exercises: state.exercises, limits: state.limits,
+               feedbackFormUrl: state.feedbackFormUrl,
                exercisesFailed: state.exercisesFailed }
   }
 }
@@ -133,14 +146,26 @@ export default function App() {
   const inFlight = useRef<{ abort: () => void } | null>(null)
   const online = useOnline()
 
+  // Anything that swaps the screen goes through here rather than dispatch, so it
+  // gets a View Transition where the browser has one. Everything else — upload
+  // progress, the catalogue arriving — dispatches directly, because animating a
+  // progress bar's own updates would fight the transition on .progress-fill.
+  //
+  // withViewTransition falls straight through to update() where the API is
+  // missing or motion is reduced, so this is the same call either way.
+  function go(action: Action) {
+    withViewTransition(() => dispatch(action))
+  }
+
   // refetch when the connection comes back, so an app opened offline heals
   // itself rather than needing a manual reload
   useEffect(() => {
     if (!online) return
     let cancelled = false
     fetchCatalog()
-      .then(({ exercises, limits }) => {
-        if (!cancelled) dispatch({ type: 'exercises-loaded', exercises, limits })
+      .then(({ exercises, limits, feedback_form_url }) => {
+        if (!cancelled) dispatch({ type: 'exercises-loaded', exercises, limits,
+                                   feedbackFormUrl: feedback_form_url ?? null })
       })
       .catch(() => {
         if (!cancelled) dispatch({ type: 'exercises-failed' })
@@ -158,6 +183,7 @@ export default function App() {
   if (deadStart) {
     return (
       <main>
+        <Masthead />
         <OfflineNotice standalone />
         <Disclaimer />
       </main>
@@ -165,7 +191,7 @@ export default function App() {
   }
 
   function send(submission: Submission) {
-    dispatch({ type: 'submit', submission })
+    go({ type: 'submit', submission })
 
     const handle = analyze({
       video: submission.video,
@@ -179,8 +205,13 @@ export default function App() {
     inFlight.current = handle
 
     handle.result
-      .then((result) => dispatch({ type: 'succeeded', result }))
-      .catch((error: ApiError) => dispatch({ type: 'failed', error }))
+      .then((result) => {
+        // Before the screen swaps, so the buzz lands with the change rather than
+        // after it. No-op on iOS, and often ignored elsewhere — see motion.ts.
+        buzzOnResult()
+        go({ type: 'succeeded', result })
+      })
+      .catch((error: ApiError) => go({ type: 'failed', error }))
       .finally(() => { inFlight.current = null })
   }
 
@@ -190,6 +221,8 @@ export default function App() {
 
   return (
     <main>
+      <Masthead />
+
       {!online && <OfflineNotice />}
 
       {/* Above the exercise list on purpose. Installing to the home screen is the
@@ -202,15 +235,29 @@ export default function App() {
         <ExerciseSelect
           exercises={state.exercises}
           loadFailed={state.exercisesFailed}
-          onPick={(exercise) => dispatch({ type: 'pick', exercise })}
+          onPick={(exercise) => go({ type: 'pick', exercise })}
         />
       )}
 
       {state.screen === 'guide' && state.chosen && (
         <FilmingGuide
           exercise={state.chosen}
-          onContinue={() => dispatch({ type: 'to', screen: 'capture' })}
-          onBack={() => dispatch({ type: 'restart' })}
+          onContinue={() => go({
+            type: 'to',
+            screen: consentGiven(state.limits.retention_hours) ? 'capture' : 'consent',
+          })}
+          onBack={() => go({ type: 'restart' })}
+        />
+      )}
+
+      {state.screen === 'consent' && (
+        <Consent
+          limits={state.limits}
+          onAccept={() => {
+            recordConsent(state.limits.retention_hours)
+            go({ type: 'to', screen: 'capture' })
+          }}
+          onDecline={() => go({ type: 'restart' })}
         />
       )}
 
@@ -221,7 +268,7 @@ export default function App() {
           online={online}
           onSubmit={(video, voiceNote, voiceText) =>
             send({ video, voiceNote, voiceText })}
-          onBack={() => dispatch({ type: 'to', screen: 'guide' })}
+          onBack={() => go({ type: 'to', screen: 'guide' })}
         />
       )}
 
@@ -238,7 +285,8 @@ export default function App() {
       {state.screen === 'results' && state.result && (
         <Results
           result={state.result}
-          onRestart={() => dispatch({ type: 'restart' })}
+          feedbackFormUrl={state.feedbackFormUrl}
+          onRestart={() => go({ type: 'restart' })}
         />
       )}
 
@@ -246,7 +294,7 @@ export default function App() {
         <ErrorPanel
           error={state.error}
           onRetry={() => state.submission && send(state.submission)}
-          onRestart={() => dispatch({ type: 'restart' })}
+          onRestart={() => go({ type: 'restart' })}
         />
       )}
 

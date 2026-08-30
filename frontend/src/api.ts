@@ -32,6 +32,16 @@ export async function fetchCatalog(): Promise<Catalog> {
   return await res.json()
 }
 
+/**
+ * Remove one analysis from the server now, without waiting for the retention
+ * sweep. The consent copy points at this — "you can also delete an analysis
+ * immediately" has to be a button, not a sentence.
+ */
+export async function deleteJob(jobId: string): Promise<void> {
+  const res = await fetch(`/jobs/${encodeURIComponent(jobId)}`, { method: 'DELETE' })
+  if (!res.ok) throw new Error(`DELETE /jobs returned ${res.status}`)
+}
+
 export interface AnalyzeArgs {
   video: File
   exerciseType: string

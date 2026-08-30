@@ -11,26 +11,33 @@
  *
  * Driven off fixtures rather than reasoning about the components.
  */
-import { render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import Results from '../screens/Results'
+import type { AnalyzeResponse } from '../types'
 import {
-  fallbackReportResult, lowDetectionResult, noRepsResult, okResult, okWithWarning,
+  fallbackReportResult, lowDetectionResult, noRepsResult, okResult,
+  okWithWarning, rotatedResult,
 } from './fixtures'
 
 const noop = () => {}
 
+function show(result: AnalyzeResponse, feedbackFormUrl: string | null = null) {
+  return render(<Results result={result} feedbackFormUrl={feedbackFormUrl}
+                         onRestart={noop} />)
+}
+
 describe('a clip that analysed cleanly', () => {
   it('shows the rep count and both key frames', () => {
-    render(<Results result={okResult} onRestart={noop} />)
+    show(okResult)
     expect(screen.getByText(/2 reps/)).toBeInTheDocument()
     expect(screen.getByAltText('worst form frame')).toBeInTheDocument()
     expect(screen.getByAltText('best form frame')).toBeInTheDocument()
   })
 
   it('renders the five-part report in order', () => {
-    render(<Results result={okResult} onRestart={noop} />)
+    show(okResult)
     // the page has other h3s too (key frames, the transcript), so check the
     // report's own headings appear in the right order relative to each other
     // rather than demanding they are the only ones present
@@ -49,7 +56,7 @@ describe('a clip that analysed cleanly', () => {
   it('keeps the filming tip separate from the coaching prose', () => {
     // it is deterministic, never LLM-written (Decision 23) — if it were folded
     // into the report body that distinction would be invisible to the user
-    const { container } = render(<Results result={okResult} onRestart={noop} />)
+    const { container } = show(okResult)
     const tip = container.querySelector('.filming-tip')
     expect(tip).toBeInTheDocument()
     expect(tip).toHaveTextContent(/film a set from the front/i)
@@ -57,11 +64,15 @@ describe('a clip that analysed cleanly', () => {
 })
 
 describe.each([
-  ['no_reps', noRepsResult, /No complete rep found/i],
-  ['low_detection', lowDetectionResult, /Tracking was too unreliable/i],
-])('a clip that could not be analysed (%s)', (_label, result, heading) => {
+  ['no_reps', noRepsResult, /No complete rep found/i,
+   /Re-record with the framing above/i],
+  ['low_detection', lowDetectionResult, /Tracking was too unreliable/i,
+   /Re-record with the framing above/i],
+  ['rotated', rotatedResult, /decodes sideways/i,
+   /Re-upload the original file/i],
+])('a clip that could not be analysed (%s)', (_label, result, heading, nextStep) => {
   it('leads with an explicit banner saying so', () => {
-    render(<Results result={result} onRestart={noop} />)
+    show(result)
     // by role, because the banner wording and the report's primary_issue say
     // similar things — it's the *heading* that has to be there
     expect(screen.getByRole('heading', { name: heading })).toBeInTheDocument()
@@ -69,28 +80,28 @@ describe.each([
 
   it('renders NO "what you did well" section at all', () => {
     // not an empty list, not a placeholder — the heading must be absent
-    render(<Results result={result} onRestart={noop} />)
+    show(result)
     expect(screen.queryByText('What you did well')).not.toBeInTheDocument()
   })
 
   it('does not show a rep count', () => {
-    render(<Results result={result} onRestart={noop} />)
+    show(result)
     expect(screen.queryByText(/\d+ reps?/)).not.toBeInTheDocument()
   })
 
   it('does not show key frames', () => {
-    render(<Results result={result} onRestart={noop} />)
+    show(result)
     expect(screen.queryByText('Key moments')).not.toBeInTheDocument()
   })
 
   it('uses the failure card treatment, not the neutral one', () => {
-    const { container } = render(<Results result={result} onRestart={noop} />)
+    const { container } = show(result)
     expect(container.querySelector('.banner-bad')).toBeInTheDocument()
   })
 
   it('still explains what to do next', () => {
-    render(<Results result={result} onRestart={noop} />)
-    expect(screen.getByText(/Re-record with the framing above/i)).toBeInTheDocument()
+    show(result)
+    expect(screen.getAllByText(nextStep).length).toBeGreaterThan(0)
   })
 })
 
@@ -98,32 +109,107 @@ describe('warnings', () => {
   it('are shown even when the analysis itself succeeded', () => {
     // a voice note that failed to transcribe on an otherwise fine run is exactly
     // where silently dropping the warning would be dishonest
-    render(<Results result={okWithWarning} onRestart={noop} />)
+    show(okWithWarning)
     expect(screen.getByText(/voice note couldn't be transcribed/i)).toBeInTheDocument()
   })
 
   it('say what happened without quoting the provider at the user', () => {
     // this carried the raw exception, so an invalid key put "Groq transcription
     // error 401: {...}" in the banner
-    render(<Results result={okWithWarning} onRestart={noop} />)
+    show(okWithWarning)
     const banner = document.querySelector('.banner-warn')
     expect(banner?.textContent).not.toMatch(/401|Groq|Traceback/)
   })
 
   it('produce no banner at all when there are none', () => {
-    const { container } = render(<Results result={okResult} onRestart={noop} />)
+    const { container } = show(okResult)
     expect(container.querySelector('.banner-warn')).not.toBeInTheDocument()
   })
 })
 
 describe('provenance', () => {
   it('says when the wording came from the language model', () => {
-    render(<Results result={okResult} onRestart={noop} />)
+    show(okResult)
     expect(screen.getByText(/it does not decide them/i)).toBeInTheDocument()
   })
 
   it('tells the user when the model was unavailable and this is the fallback', () => {
-    render(<Results result={fallbackReportResult} onRestart={noop} />)
+    show(fallbackReportResult)
     expect(screen.getByText(/language model was unavailable/i)).toBeInTheDocument()
+  })
+})
+
+describe('the feedback-form link', () => {
+  // Round-scoped: the server sends a URL only while a testing round is running,
+  // and the link joins the response to this exact analysis via the job id.
+  it('appears when a form URL was served, with the job id filled in', () => {
+    show(okResult, 'https://example.test/form?entry.7={job_id}')
+    const link = screen.getByRole('link', { name: /open the feedback form/i })
+    expect(link).toHaveAttribute('href',
+      'https://example.test/form?entry.7=squat_20260728_234148')
+  })
+
+  it('fills the percent-encoded placeholder Google\'s prefill generator makes', () => {
+    show(okResult, 'https://example.test/form?entry.7=%7Bjob_id%7D')
+    const link = screen.getByRole('link', { name: /open the feedback form/i })
+    expect(link.getAttribute('href')).toContain('squat_20260728_234148')
+  })
+
+  it('does not exist outside a testing round', () => {
+    show(okResult, null)
+    expect(screen.queryByText(/feedback form/i)).not.toBeInTheDocument()
+  })
+})
+
+describe('deleting an analysis now', () => {
+  // The consent copy promises this, so it has to be a working button. The
+  // endpoint is WP-07's DELETE /jobs/{id}; this screen is the only caller.
+  afterEach(() => vi.unstubAllGlobals())
+
+  function stubDelete(response: Partial<Response>) {
+    const spy = vi.fn().mockResolvedValue({ ok: true, ...response })
+    vi.stubGlobal('fetch', spy)
+    return spy
+  }
+
+  it('asks before doing anything irreversible', () => {
+    const spy = stubDelete({})
+    show(okResult)
+    fireEvent.click(screen.getByText(/delete this analysis/i))
+    expect(screen.getByText(/can't be undone/i)).toBeInTheDocument()
+    expect(spy).not.toHaveBeenCalled()
+  })
+
+  it('sends the DELETE and then says everything is gone', async () => {
+    const spy = stubDelete({})
+    show(okResult)
+    fireEvent.click(screen.getByText(/delete this analysis/i))
+    fireEvent.click(screen.getByText(/yes, delete it/i))
+
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Deleted' })).toBeInTheDocument())
+    expect(spy).toHaveBeenCalledWith('/jobs/squat_20260728_234148',
+                                     { method: 'DELETE' })
+    // the report is no longer on screen — we just told them it is gone
+    expect(screen.queryByText('What you did well')).not.toBeInTheDocument()
+  })
+
+  it('keeps the report and says so when the delete fails', async () => {
+    stubDelete({ ok: false, status: 500 })
+    show(okResult)
+    fireEvent.click(screen.getByText(/delete this analysis/i))
+    fireEvent.click(screen.getByText(/yes, delete it/i))
+
+    await waitFor(() =>
+      expect(screen.getByText(/didn't go through/i)).toBeInTheDocument())
+    expect(screen.getByText('What you did well')).toBeInTheDocument()
+  })
+
+  it('can be backed out of', () => {
+    stubDelete({})
+    show(okResult)
+    fireEvent.click(screen.getByText(/delete this analysis/i))
+    fireEvent.click(screen.getByText('Keep it'))
+    expect(screen.queryByText(/can't be undone/i)).not.toBeInTheDocument()
   })
 })

@@ -6,16 +6,32 @@
          notched phones once this is installed to the home screen -->
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="description" content="Upload a short clip of your set and get coaching on your form." />
-    <meta name="theme-color" content="#12161c" />
+    <!-- --bg from styles.css, per scheme. The manifest can only carry one value
+         and carries the dark one, which is the default scheme. -->
+    <meta name="theme-color" content="#10141a" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f1f4f8" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#10141a" />
+
+    <!-- Headings and the wordmark only; body text stays on the system stack.
+         Same origin, so no crossorigin fetch is going anywhere else — the
+         attribute is still required because font requests are CORS-mode even
+         same-origin, and without it the preload is fetched twice. -->
+    <link rel="preload" href="/fonts/space-grotesk-var-336df680.woff2"
+          as="font" type="font/woff2" crossorigin />
+
+    <!-- Without these the browser asks for /favicon.ico on every load and gets a
+         404, which shows up as a logged console error. SVG first, PNG for the
+         browsers that don't take one. -->
+    <link rel="icon" href="/icons/favicon.svg" type="image/svg+xml" />
 
     <link rel="manifest" href="/manifest.webmanifest" />
     <!-- iOS still reads these for Add to Home Screen; the manifest alone isn't enough there -->
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Form Coach" />
+    <meta name="apple-mobile-web-app-title" content="Forma" />
 
-    <title>Form Coach — movement feedback</title>
+    <title>Forma — movement feedback</title>
   </head>
   <body>
     <div id="root"></div>

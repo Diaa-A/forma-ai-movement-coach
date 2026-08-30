@@ -25,10 +25,18 @@ from PIL import Image, ImageDraw
 
 OUT_DIR = Path(__file__).resolve().parents[1] / "frontend" / "public" / "icons"
 
-BG = (18, 22, 28)          # --bg from styles.css, so the icon matches the app
-LIMB = (77, 163, 255)      # --accent
-JOINT = (232, 237, 244)    # --text
-FLAG = (226, 104, 95)      # --bad, on the trunk, where the cue usually fires
+# The dark-scheme hex fallbacks from styles.css, so the icon matches the app.
+# Those are generated from OKLCH now (docs/UI_DESIGN_PLAN.md 2.3) rather than
+# picked by hand, so if the palette moves again, take the numbers from the same
+# place rather than sampling a screenshot.
+BG = (16, 20, 26)          # --bg        oklch(0.190 0.014 258)
+LIMB = (139, 166, 252)     # --accent    oklch(0.740 0.128 270)
+JOINT = (234, 239, 245)    # --text      oklch(0.950 0.010 258)
+FLAG = (252, 129, 119)     # --bad       oklch(0.740 0.152  26)
+# The red trunk stays in the icon and is deliberately absent from the on-screen
+# mark in Masthead.tsx. An icon is looked at once, on a home screen, with nothing
+# to confuse it with; the masthead sits on the results screen next to a banner
+# where red means "this clip could not be scored".
 
 # Figure in a 100x100 space, origin top-left, so it scales to any output size.
 # Side-on, facing right, at the bottom of a squat: the trunk tips FORWARD (the

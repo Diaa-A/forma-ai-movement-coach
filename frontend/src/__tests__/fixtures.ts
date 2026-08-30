@@ -84,6 +84,25 @@ export const lowDetectionResult: AnalyzeResponse = {
   },
 }
 
+export const rotatedResult: AnalyzeResponse = {
+  ...noRepsResult,
+  job_id: 'squat_rotated',
+  status: 'rotated',
+  coaching_report: {
+    ...notAnalysedReport,
+    primary_issue:
+      'This clip decodes sideways, so the analysis would be measuring a rotated ' +
+      'image rather than your form. This usually means the file was re-saved on ' +
+      'its way here — clips sent through messaging apps often lose the flag ' +
+      'that says which way up they go.',
+    corrective_cues: [
+      'Upload the original clip straight from your camera roll, not a copy ' +
+      'that was sent through a chat app or an editor.',
+    ],
+    next_session_focus: 'Re-upload the original file and it should analyse normally.',
+  },
+}
+
 // The warning used to be f"voice transcription failed: {e}", which meant the
 // provider's own error body was rendered here verbatim. It says this now.
 export const okWithWarning: AnalyzeResponse = {
