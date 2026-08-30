@@ -308,7 +308,7 @@ def main():
 
 def coaching_default():
     from backend.pipeline import coaching
-    return coaching.DEFAULT_MODEL
+    return coaching.active_model()
 
 
 # The code that decides what this run measures. coaching.py is in the list

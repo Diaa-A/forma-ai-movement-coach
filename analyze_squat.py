@@ -13,7 +13,7 @@ from pathlib import Path
 from backend.pipeline.runner import run_pipeline, RunOptions
 from backend.exercises.registry import exercise_ids
 from backend.pipeline.coaching import (
-    generate_coaching_report, format_report, DEFAULT_MODEL as DEFAULT_LLM_MODEL,
+    generate_coaching_report, format_report,
     CoachingReport,
 )
 
@@ -54,7 +54,7 @@ def _parse_args():
                    help="plain-text user context (used directly, no transcription)")
     p.add_argument("--whisper-model", default=None,
                    help="override the Whisper model size (default 'small')")
-    p.add_argument("--llm-model", default=os.environ.get("GROQ_MODEL", DEFAULT_LLM_MODEL),
+    p.add_argument("--llm-model", default=None,
                    help="Groq model id")
     return p.parse_args()
 

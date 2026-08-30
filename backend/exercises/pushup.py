@@ -190,6 +190,10 @@ PUSHUP = Movement(
     scale_metric="euclidean",
     is_valid=frame_valid,
     score_frame=_score_frame,
+    # done on the floor, so a correctly decoded frame shows the body lying down.
+    # The rotation guard reads this the other way round from the squat: a
+    # push-up whose axis comes back near-vertical is a sideways-decoded file.
+    body_axis="horizontal",
     use_travel_gate=False,
     min_flexion=MIN_REP_ELBOW_FLEXION,
     flexion_rel_floor=MIN_REP_FLEXION_RATIO,

@@ -39,12 +39,40 @@ from ..exercises.mechanics import Evaluation, CueHit
 
 
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+# The env override matters because the provider deletes models out from under
+# you: Groq retired llama-3.3-70b-versatile between 13 and 26 Aug 2026, and
+# from then on every coaching call 404'd and fell back to cue wording while
+# /health stayed green (it checks the key is present, not that a call works).
+# GROQ_MODEL was already documented in .env.example and honoured by the CLI,
+# but the API read this constant directly, so the override silently did not
+# apply to the deployed app -- the one place it was needed. The default is left
+# as the retired name on purpose: it is the model every published faithfulness
+# number was measured on, and the replacement should be chosen with a harness
+# rerun, not defaulted in here.
 DEFAULT_MODEL = "llama-3.3-70b-versatile"
 REQUEST_TIMEOUT = 30.0
 # Named because the faithfulness harness has to record the temperature it
 # measured at, and a run whose provenance says 0.4 while the request sends
 # something else is worse than one that says nothing.
 TEMPERATURE = 0.4
+
+
+def active_model() -> str:
+    """The model a call will actually use.
+
+    Read here rather than captured at import, and that distinction is the whole
+    point of the function. `backend/main.py` imports this module at line 26 and
+    loads .env at line 43, so a module-level os.environ.get() runs before the
+    file it is meant to read -- GROQ_MODEL in .env had no effect at all, while
+    looking exactly like it did. On Railway the platform sets real environment
+    variables before the process starts, so that ordering happened to work
+    there and fail locally, which is the worse way round: the place you test is
+    the place it is broken.
+
+    Anything that records provenance should call this rather than reading
+    DEFAULT_MODEL, or the artefact will name a model the run did not use.
+    """
+    return os.environ.get("GROQ_MODEL") or DEFAULT_MODEL
 
 log = logging.getLogger("coach.coaching")
 
@@ -348,24 +376,40 @@ def not_analyzed_report(status: str, profile=None) -> CoachingReport:
     if status == "no_reps":
         primary = (f"I couldn't detect a complete {name} rep in this clip, so "
                    "there's nothing to score yet.")
+    elif status == "rotated":
+        # Nothing wrong with the recording or the person -- the file's pixels
+        # are stored sideways and its rotation flag is gone, so every angle
+        # would be measured on a tipped-over image. Analysing it anyway is how
+        # the reference clip's best frame got reported as a forward-lean fault.
+        primary = ("This clip decodes sideways, so the analysis would be "
+                   "measuring a rotated image rather than your form. This "
+                   "usually means the file was re-saved on its way here — "
+                   "clips sent through messaging apps often lose the flag "
+                   "that says which way up they go.")
     else:  # low_detection
         primary = ("Body tracking was too unreliable on this clip to give "
                    "trustworthy feedback.")
 
     cues = []
-    if profile is not None:
-        cues.append(profile.filming_guide)
+    if status == "rotated":
+        cues.append("Upload the original clip straight from your camera roll, "
+                    "not a copy that was sent through a chat app or an editor.")
+        next_focus = "Re-upload the original file and it should analyse normally."
     else:
-        cues.append("Film side-on at about hip height, with your whole body "
-                    "in the frame.")
-    cues.append("Wear fitted clothing and use a plain, uncluttered background.")
+        if profile is not None:
+            cues.append(profile.filming_guide)
+        else:
+            cues.append("Film side-on at about hip height, with your whole body "
+                        "in the frame.")
+        cues.append("Wear fitted clothing and use a plain, uncluttered background.")
+        next_focus = "Re-record with the framing above and upload again."
 
     return CoachingReport(
         what_went_well=[],
         primary_issue=primary,
         secondary_issues=[],
         corrective_cues=cues,
-        next_session_focus="Re-record with the framing above and upload again.",
+        next_session_focus=next_focus,
         source="not_analyzed",
         model=None,
     )
@@ -373,7 +417,7 @@ def not_analyzed_report(status: str, profile=None) -> CoachingReport:
 
 def generate_coaching_report(evaluation: Evaluation,
                              voice_transcript: str = "",
-                             model: str = DEFAULT_MODEL,
+                             model: Optional[str] = None,
                              force_dry_run: bool = False) -> CoachingReport:
     """Top-level coaching call.
 
@@ -385,6 +429,10 @@ def generate_coaching_report(evaluation: Evaluation,
           telling the user they are reading the system's own wording — so it is
           not silent, and no exception text reaches them.
     """
+    # None means "whatever the environment says", resolved now rather than when
+    # this module was imported -- see active_model.
+    model = model or active_model()
+
     # the camera-view tip is deterministic — never left to the LLM
     tip = getattr(evaluation, "view_guidance", None)
 

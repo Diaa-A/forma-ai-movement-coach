@@ -30,7 +30,7 @@ from typing import Callable, List, Optional, Sequence, Tuple
 
 import numpy as np
 
-from ..pipeline.pose import LM
+from ..pipeline.pose import LM, VISIBILITY_THRESHOLD
 
 
 @dataclass(frozen=True)
@@ -56,6 +56,12 @@ class Movement:
     is_valid: Callable[[dict, str], bool]
     # single-frame deviation score, higher is worse -> (score, breakdown)
     score_frame: Callable[[dict, str], Tuple[float, dict]]
+
+    # Which way the shoulder->ankle line runs in a correctly decoded frame:
+    # "vertical" for a standing movement, "horizontal" for one done on the floor.
+    # Read by the rotation guard, which refuses a clip whose measured axis is on
+    # the wrong side of the cut for this movement -- see body_axis_tilt below.
+    body_axis: str = "vertical"
 
     # --- rep gating, all as multiples of the body scale or degrees of bend ---
     #
@@ -168,6 +174,84 @@ def body_scale(movement: Movement, landmarks) -> float:
         d = d[np.isfinite(d)]
         lengths.append(float(np.median(d)) if d.size else 0.0)
     return max(lengths) if lengths else 0.0
+
+
+# Refusal cuts for body_axis_tilt, one per expected axis, with a wide dead band
+# between them so a diagonal-ish framing is never refused on this evidence.
+# Calibrated on the fixture set (per-clip medians, full model):
+#
+#     correct squats              8.7 - 10.5     (4 clips)
+#     correct push-ups           54.5 - 72.6     (8 clips, incl. one whose
+#                                                 rotation flag IS honoured)
+#     squat with flag stripped          81.3
+#     push-up stored sideways           18.6
+#
+# So every correctly decoded clip clears its cut by at least 24 degrees, and both
+# genuinely rotated ones land past it by more than 21.
+TILT_ROTATED_ABOVE = 60.0    # a "vertical" movement reading this horizontal is rotated
+TILT_ROTATED_BELOW = 30.0    # a "horizontal" movement reading this vertical is rotated
+
+# Below either floor the median is not evidence, so no verdict is given. The
+# clips that fall here are the ones the subject is barely tracked in, and those
+# already come back as no_reps or low_detection.
+_TILT_MIN_FRAMES = 10
+_TILT_MIN_FRACTION = 0.2
+
+
+def body_axis_tilt(landmarks):
+    """Median angle of the shoulder->ankle line from image vertical, in degrees:
+    0 is an upright body, 90 a horizontal one.
+
+    Exists for one failure. A file whose pixels are stored rotated and whose
+    rotation flag has been stripped -- messaging-app re-encodes do this --
+    decodes sideways, and the pipeline then measures a tipped-over person
+    without noticing: the reference clip went from 7 reps to 1 with the same
+    frame reported as best and as a forward-lean fault, status still ok.
+    Metadata cannot catch it because there is no metadata. The pose can,
+    because a body has an axis and the movement knows which way it should run.
+
+    Per frame the better-seen side is used, gated at the shared visibility
+    threshold -- side-on footage rarely clears the gate on both sides at once.
+    Returns None when too few frames qualify to support a verdict either way.
+    """
+    n = landmarks.shape[0]
+    tilts = []
+    for f in range(n):
+        best = None
+        for side in ("left", "right"):
+            sh = landmarks[f, LM[f"{side}_shoulder"]]
+            an = landmarks[f, LM[f"{side}_ankle"]]
+            vis = min(sh[3], an[3])
+            if not np.isfinite(vis) or vis < VISIBILITY_THRESHOLD:
+                continue
+            if not np.all(np.isfinite([sh[0], sh[1], an[0], an[1]])):
+                continue
+            if best is None or vis > best[0]:
+                best = (vis, sh, an)
+        if best is None:
+            continue
+        _, sh, an = best
+        dx = an[0] - sh[0]
+        dy = an[1] - sh[1]
+        if dx == 0 and dy == 0:
+            continue
+        tilts.append(float(np.degrees(np.arctan2(abs(dx), abs(dy)))))
+    if len(tilts) < _TILT_MIN_FRAMES or len(tilts) < _TILT_MIN_FRACTION * n:
+        return None
+    return float(np.median(tilts))
+
+
+def axis_looks_rotated(movement: Movement, tilt) -> bool:
+    """Is the measured body axis on the wrong side of this movement's cut?
+
+    None -- no measurement -- is never refused. A clip we cannot see a body in
+    is a detection problem, and the detection statuses already cover it.
+    """
+    if tilt is None:
+        return False
+    if movement.body_axis == "horizontal":
+        return tilt < TILT_ROTATED_BELOW
+    return tilt > TILT_ROTATED_ABOVE
 
 
 # ---------------------------------------------------------------------------

@@ -27,10 +27,7 @@ from .pose import extract_landmarks, N_LANDMARKS
 from .filter import smooth_series
 from .phase_detection import detect_bottoms, segment_reps, label_phases
 from .render import render_video, save_key_frame, read_frames_exact
-from .coaching import (
-    generate_coaching_report, not_analyzed_report,
-    DEFAULT_MODEL as DEFAULT_LLM_MODEL,
-)
+from .coaching import generate_coaching_report, not_analyzed_report
 from . import whisper_wrapper
 from ..exercises import mechanics
 from ..exercises.registry import get_spec
@@ -64,7 +61,10 @@ class RunOptions:
     voice_transcript: str = ""        # pl ain text (used directly if non-empty)
     voice_audio_path: str = ""        # optional — transcribed if provided
     whisper_model: Optional[str] = None
-    llm_model: str = DEFAULT_LLM_MODEL
+    # None lets coaching.active_model() decide at call time. A dataclass default
+    # is evaluated at import, which is what made GROQ_MODEL look configurable
+    # while doing nothing.
+    llm_model: Optional[str] = None
 
 
 @dataclass
@@ -173,7 +173,15 @@ def run_pipeline(input_path, output_root, exercise: str = "squat",
     # glitches), so the rate reflects usable frames, not just any detection.
     valid = sum(1 for a in angles if movement.is_valid(a, side))
     detection_rate = valid / n_frames if n_frames else 0.0
-    if not reps:
+    # The rotation check comes first because it explains the others: a sideways-
+    # decoded file usually still tracks well, produces a rep count and a status
+    # of ok, and is wrong about all of it -- the reference clip with its rotation
+    # flag stripped came back 1 rep instead of 7, with its best frame flagged as
+    # a forward-lean fault. Declared rather than analysed, per the coverage rule.
+    tilt = mechanics.body_axis_tilt(lm_smooth)
+    if mechanics.axis_looks_rotated(movement, tilt):
+        status = "rotated"
+    elif not reps:
         status = "no_reps"
     elif detection_rate < 0.5:
         status = "low_detection"
@@ -195,6 +203,7 @@ def run_pipeline(input_path, output_root, exercise: str = "squat",
         "side": side,
         "status": status,
         "detection_rate": round(detection_rate, 3),
+        "body_axis_tilt": round(tilt, 1) if tilt is not None else None,
         "bottoms_raw": bottoms,
         "bottoms": [b for (_, b, _) in reps],
         "reps": [

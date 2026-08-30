@@ -103,7 +103,7 @@ def test_the_failure_report_awards_nothing(monkeypatch):
     what_went_well means the UI renders no heading at all, so "we could not
     measure this" can never be read as "your form was fine".
     """
-    for status in ("no_reps", "low_detection"):
+    for status in ("no_reps", "low_detection", "rotated"):
         report = coaching.not_analyzed_report(status, SQUAT_PROFILE)
         assert report.what_went_well == []
         assert report.secondary_issues == []

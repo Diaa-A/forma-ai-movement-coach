@@ -31,8 +31,10 @@ router = APIRouter()
 log = logging.getLogger("coach.api")
 
 
-# Upload + output roots, kept sibling so the /results static mount in backend.main
-# serves both the uploaded original and the rendered artefacts.
+# Upload + output roots, kept sibling so one retention sweep covers both. Only
+# OUTPUT_ROOT is mounted at /results; the uploaded original is deliberately not
+# reachable from outside — it is someone's body video, and nothing in the app
+# needs to serve it back.
 #
 # The default is absolute and anchored to the repo rather than to the working
 # directory. It used to be Path("data"), which quietly means "data relative to
@@ -164,6 +166,11 @@ def exercises():
             for ex_id in exercise_ids()
         ],
         limits=current_limits(),
+        # Round-scoped: the results screen offers the feedback form only while
+        # the variable is set, so the study switches off without a rebuild. Read
+        # per request rather than at import so a platform variable change (plus
+        # the deploy Railway needs to apply it) is all it takes.
+        feedback_form_url=os.environ.get("FEEDBACK_FORM_URL") or None,
     )
 
 

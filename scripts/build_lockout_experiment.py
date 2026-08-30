@@ -291,7 +291,7 @@ def build() -> dict:
 
     return {
         "cases": tracks,
-        "model": coaching.DEFAULT_MODEL,
+        "model": coaching.active_model(),
         "temperature": coaching.TEMPERATURE,
         "primary_endpoint": (
             "generations asserting that the user failed to lock out. Counted off "

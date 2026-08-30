@@ -55,6 +55,11 @@ class LimitsOut(BaseModel):
 class ExercisesResponse(BaseModel):
     exercises: List[ExerciseOut]
     limits: LimitsOut
+    # Present only while a user-testing round is running (FEEDBACK_FORM_URL in
+    # the environment). May carry a {job_id} placeholder, which the client fills
+    # in so a form response joins to the exact analysis the participant saw --
+    # that join is what turns "participant 3 rated clarity 4" into data.
+    feedback_form_url: Optional[str] = None
 
 
 class KeyFrame(BaseModel):
@@ -95,7 +100,7 @@ class CoachingReportOut(BaseModel):
 class AnalyzeResponse(BaseModel):
     job_id: str
     exercise_type: str
-    status: str               # "ok" | "no_reps" | "low_detection"
+    status: str               # "ok" | "no_reps" | "low_detection" | "rotated"
     fps: float
     frame_count: int
     side: str

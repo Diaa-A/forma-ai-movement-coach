@@ -96,3 +96,20 @@ def test_analyze_runs_the_exercise_that_was_asked_for(monkeypatch):
         assert seen.get("exercise") == requested, (
             f"asked for {requested}, pipeline was told {seen.get('exercise')}")
         assert seen["job_id"].startswith(requested)
+
+
+def test_no_feedback_form_is_offered_unless_one_is_configured(monkeypatch):
+    """The link is round-scoped: outside a testing round the variable is unset
+    and the results screen must have nothing to render."""
+    monkeypatch.delenv("FEEDBACK_FORM_URL", raising=False)
+    r = client.get("/exercises")
+    assert r.json()["feedback_form_url"] is None
+
+
+def test_the_feedback_form_url_is_served_verbatim(monkeypatch):
+    """Placeholder included — substituting {job_id} is the client's job, because
+    only the client knows which analysis the participant is looking at."""
+    url = "https://docs.google.com/forms/d/e/abc/viewform?entry.7=%7Bjob_id%7D"
+    monkeypatch.setenv("FEEDBACK_FORM_URL", url)
+    r = client.get("/exercises")
+    assert r.json()["feedback_form_url"] == url

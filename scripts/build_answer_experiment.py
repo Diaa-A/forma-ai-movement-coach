@@ -65,7 +65,7 @@ def build() -> dict:
         "case": CASE,
         "question": ("let me know if my arms are too flared or in the correct "
                      "position, and if I'm doing the correct form"),
-        "model": coaching.DEFAULT_MODEL,
+        "model": coaching.active_model(),
         "temperature": coaching.TEMPERATURE,
         "measure": ("generations that answered the user, counted off the "
                     "answer_to_question field rather than read out of the prose"),
