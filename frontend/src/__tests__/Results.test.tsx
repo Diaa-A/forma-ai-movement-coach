@@ -30,10 +30,32 @@ function show(result: AnalyzeResponse, feedbackFormUrl: string | null = null) {
 
 describe('a clip that analysed cleanly', () => {
   it('shows the rep count and both key frames', () => {
+    // the count moved into the summary strip on 30 Aug, where the number and its
+    // unit are separate elements, so a contiguous /2 reps/ matcher no longer sees
+    // it. Asserting on the strip rather than loosening the matcher: the point of
+    // the test is that the count is on screen, and it should fail if it is not.
     show(okResult)
-    expect(screen.getByText(/2 reps/)).toBeInTheDocument()
+    const stats = document.querySelector('.stats')
+    expect(stats).toHaveTextContent('2')
+    expect(stats).toHaveTextContent('reps')
     expect(screen.getByAltText('worst form frame')).toBeInTheDocument()
     expect(screen.getByAltText('best form frame')).toBeInTheDocument()
+  })
+
+  it('states the clip length and the side analysed', () => {
+    show(okResult)
+    const stats = document.querySelector('.stats')
+    // 608 frames at 30 fps
+    expect(stats).toHaveTextContent('20.3s')
+    expect(stats).toHaveTextContent('left')
+  })
+
+  it('reports flagged or clean from the same flag the key frame uses', () => {
+    // the strip must not disagree with the caption beside it: both read
+    // key_frames.worst.highlighted, and okResult has no flagged worst frame
+    show(okResult)
+    expect(document.querySelector('.stat-clean')).toBeInTheDocument()
+    expect(document.querySelector('.stat-flagged')).not.toBeInTheDocument()
   })
 
   it('renders the five-part report in order', () => {

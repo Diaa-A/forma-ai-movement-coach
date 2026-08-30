@@ -35,11 +35,28 @@ export function prefersReducedMotion(): boolean {
 export function withViewTransition(update: () => void): void {
   // lib.dom types startViewTransition as always present; it is not, in Firefox
   // or in jsdom, so the runtime check stays regardless of what TypeScript thinks
-  if (typeof document.startViewTransition !== 'function' || prefersReducedMotion()) {
+  //
+  // document.hidden is in this list because of a real failure, found driving the
+  // results screen in a background tab: a transition started while the document
+  // is hidden is skipped, its update callback never runs, and the state change
+  // inside it is lost for good -- bringing the tab back does not replay it. The
+  // screen sat on "Uploading your clip" after the server had already returned
+  // 200. On a phone that is the ordinary case, not an edge one: the analysis
+  // takes fifteen to thirty seconds and people switch apps while they wait.
+  // Losing somebody's result to a cosmetic animation is not a trade worth making.
+  if (typeof document.startViewTransition !== 'function'
+      || prefersReducedMotion()
+      || document.hidden) {
     update()
     return
   }
   const transition = document.startViewTransition(() => flushSync(update))
+  // Belt and braces for the same failure arriving another way -- a transition
+  // superseded by the next one, or the document hidden between the check above
+  // and the callback. updateCallbackDone rejects when the callback did not run,
+  // so apply the change directly rather than dropping it. Re-applying is safe:
+  // every action this wraps sets state to a fixed value rather than toggling it.
+  transition.updateCallbackDone.catch(() => update())
   // A transition that gets superseded or runs while the document is hidden
   // rejects `ready`, and with nothing attached that surfaces as an uncaught
   // promise rejection in the console — seen here as "Transition was aborted

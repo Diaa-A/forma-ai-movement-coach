@@ -9,6 +9,7 @@ import Disclaimer from './components/Disclaimer'
 import ErrorPanel from './components/ErrorPanel'
 import InstallPrompt from './components/InstallPrompt'
 import Masthead from './components/Masthead'
+import Stepper from './components/Stepper'
 import OfflineNotice from './components/OfflineNotice'
 import ExerciseSelect from './screens/ExerciseSelect'
 import FilmingGuide from './screens/FilmingGuide'
@@ -141,6 +142,16 @@ function reducer(state: State, action: Action): State {
   }
 }
 
+// Which of Stepper's four steps each screen belongs to. Consent shares its step
+// with the filming guide -- it is shown once per device, and a progress bar that
+// is four steps long for most people and five on their first run is worse than
+// one that is a little coarse. The error screen returns 0 and renders nothing:
+// it is not a place in the flow, it is a place the flow stopped.
+const STEP_OF: Record<Screen, number> = {
+  select: 1, guide: 2, consent: 2, capture: 3, processing: 3, results: 4, error: 0,
+}
+
+
 export default function App() {
   const [state, dispatch] = useReducer(reducer, initial)
   const inFlight = useRef<{ abort: () => void } | null>(null)
@@ -222,6 +233,8 @@ export default function App() {
   return (
     <main>
       <Masthead />
+
+      <Stepper current={STEP_OF[state.screen]} />
 
       {!online && <OfflineNotice />}
 

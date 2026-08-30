@@ -77,13 +77,34 @@ export default function Results({ result, feedbackFormUrl, onRestart }: Props) {
 
       <header>
         <h1>{analysed ? 'Your form' : 'What we could see'}</h1>
-        {analysed && (
-          <p className="muted">
-            {result.reps.length} {result.reps.length === 1 ? 'rep' : 'reps'} ·
-            analysed from your {result.side} side
-          </p>
-        )}
       </header>
+
+      {/* Facts from the payload and nothing derived. The temptation on a screen
+          like this is a headline score, and there is no score to give: the cue
+          layer decides what is wrong, not how good the set was, and inventing a
+          number here would be the presentation layer making a claim the analysis
+          never made. Reps, length and side are counts. The last chip reads the
+          same flag the key-frame caption does, so the two cannot disagree. */}
+      {analysed && (
+        <ul className="stats">
+          <li className="stat">
+            <strong>{result.reps.length}</strong>
+            <span>{result.reps.length === 1 ? 'rep' : 'reps'}</span>
+          </li>
+          <li className="stat">
+            <strong>{(result.frame_count / result.fps).toFixed(1)}s</strong>
+            <span>clip</span>
+          </li>
+          <li className="stat">
+            <strong>{result.side}</strong>
+            <span>side analysed</span>
+          </li>
+          <li className={`stat ${worst?.highlighted ? 'stat-flagged' : 'stat-clean'}`}>
+            <strong>{worst?.highlighted ? 'Flagged' : 'Clean'}</strong>
+            <span>{worst?.highlighted ? 'see key moments' : 'nothing marked'}</span>
+          </li>
+        </ul>
+      )}
 
       <VideoPlayer src={result.annotated_video_url} poster={worst?.url} />
 

@@ -43,6 +43,16 @@ export default function VideoPlayer({ src, poster }: Props) {
       poster={poster}
       controls
       playsInline
+      /* muted + autoPlay + loop: the clip is a few seconds of the user's own
+         set with the overlay on it, and it is the thing they came to see.
+         Waiting for a play tap wastes the moment the screen arrives. Muted is
+         not a preference here -- iOS and Chrome both refuse to autoplay with
+         sound, and an unmuted autoplay attempt simply does not start. There is
+         no audio track on the render anyway. Controls stay, so it can be
+         paused, scrubbed or replayed. */
+      muted
+      autoPlay
+      loop
       preload="metadata"
       onError={() => setFailed(true)}
     />

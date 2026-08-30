@@ -606,3 +606,107 @@ a.btn { text-decoration: none; }
     scroll-behavior: auto !important;
   }
 }
+
+/* ---- results summary ------------------------------------------------ */
+
+/* Four facts, not a score. Laid out as a row that wraps to two on a narrow
+   phone rather than a horizontal scroller: there are only ever four, and a
+   scroller hides the last one behind an affordance nobody looks for. */
+.stats {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.stat {
+  margin: 0;
+  padding: 10px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  text-align: center;
+  min-width: 0;
+}
+
+.stat strong {
+  display: block;
+  font-family: var(--font-display);
+  font-size: var(--step-1);
+  line-height: 1.15;
+  /* the side is a lowercase word from the API next to three numbers */
+  text-transform: capitalize;
+}
+
+.stat span {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  line-height: 1.25;
+}
+
+/* Borrowing the semantic colours rather than the accent: this chip says the
+   same thing the key-frame caption and the overlay say, and it should say it
+   in the same colour. */
+.stat-flagged { border-color: var(--bad); background: var(--tint-bad); }
+.stat-flagged strong { color: var(--bad); }
+.stat-clean { border-color: var(--good); background: var(--tint-good); }
+.stat-clean strong { color: var(--good); }
+
+@media (max-width: 400px) {
+  .stats { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ---- stepper -------------------------------------------------------- */
+
+.stepper ol {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.step { display: flex; align-items: center; gap: 8px; }
+
+.step-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--line-strong);
+  transition: background var(--dur-base) var(--ease-out),
+              width var(--dur-base) var(--ease-out);
+}
+
+.step-now .step-dot { width: 20px; background: var(--accent); }
+.step-done .step-dot { background: var(--accent); }
+
+.step-label {
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .step-dot { transition: none; }
+}
+
+/* Visually hidden, still read aloud. The step names for every step other than
+   the current one exist for screen readers, which otherwise get a row of
+   unlabelled dots. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
