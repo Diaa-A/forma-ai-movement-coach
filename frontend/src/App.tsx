@@ -3,6 +3,7 @@ import { analyze, fetchCatalog } from './api'
 import type { AnalyzeResponse, ApiError, Exercise, Limits } from './types'
 import { FALLBACK } from './validation'
 import { consentGiven, recordConsent } from './consent'
+import { introSeen, markIntroSeen } from './intro'
 import { useOnline } from './useOnline'
 import { buzzOnResult, withViewTransition } from './motion'
 import Disclaimer from './components/Disclaimer'
@@ -14,11 +15,12 @@ import OfflineNotice from './components/OfflineNotice'
 import ExerciseSelect from './screens/ExerciseSelect'
 import FilmingGuide from './screens/FilmingGuide'
 import Consent from './screens/Consent'
+import Intro from './screens/Intro'
 import Capture from './screens/Capture'
 import Processing from './screens/Processing'
 import Results from './screens/Results'
 
-// Six screens, no deep links, no back/forward requirement — so `screen` is a
+// Seven screens, no deep links, no back/forward requirement — so `screen` is a
 // field in the reducer rather than a router. A router here would be a dependency
 // added to model a state machine we already have. The cost is that the phone's
 // back button doesn't step through screens; every screen carries its own back
@@ -28,7 +30,11 @@ import Results from './screens/Results'
 // before anything can be recorded — the last point at which nothing has been
 // uploaded. It is skipped once accepted (remembered per device, re-shown if the
 // retention period changes), so the common path stays five screens long.
-type Screen = 'select' | 'guide' | 'consent' | 'capture' | 'processing' | 'results' | 'error'
+//
+// 'intro' is shown once per device, before the picker, and mainly exists to say
+// that the analysis takes tens of seconds. Learning that from a progress screen
+// after committing a video is learning it too late.
+type Screen = 'intro' | 'select' | 'guide' | 'consent' | 'capture' | 'processing' | 'results' | 'error'
 
 interface Submission {
   video: File
@@ -66,7 +72,8 @@ type Action =
   | { type: 'restart' }
 
 const initial: State = {
-  screen: 'select',
+  // shown once per device; every visit after the first opens on the picker
+  screen: introSeen() ? 'select' : 'intro',
   exercises: [],
   // the server's limits replace these as soon as /exercises answers; until then
   // the checks still run, so a file is never sent off unchecked
@@ -135,8 +142,11 @@ function reducer(state: State, action: Action): State {
       }
       return { ...state, error: action.error, screen: 'error' }
     case 'restart':
-      // keep the loaded catalogue, drop everything about the last run
-      return { ...initial, exercises: state.exercises, limits: state.limits,
+      // keep the loaded catalogue, drop everything about the last run. The
+      // explainer is not part of a run, so restarting goes to the picker rather
+      // than replaying it -- initial.screen is only the first-open answer.
+      return { ...initial, screen: 'select',
+               exercises: state.exercises, limits: state.limits,
                feedbackFormUrl: state.feedbackFormUrl,
                exercisesFailed: state.exercisesFailed }
   }
@@ -148,6 +158,10 @@ function reducer(state: State, action: Action): State {
 // one that is a little coarse. The error screen returns 0 and renders nothing:
 // it is not a place in the flow, it is a place the flow stopped.
 const STEP_OF: Record<Screen, number> = {
+  // intro is 0 with the error screen: it is read before the flow starts, and a
+  // "step 1 of 4" over an explainer would make the app one step longer on a
+  // first run than on every run after it.
+  intro: 0,
   select: 1, guide: 2, consent: 2, capture: 3, processing: 3, results: 4, error: 0,
 }
 
@@ -242,6 +256,15 @@ export default function App() {
           whole reason this is a PWA rather than a website, and when it sat at the
           bottom of this screen it fell below the fold on a phone -- invisible on
           the one device it exists for. */}
+      {state.screen === 'intro' && (
+        <Intro
+          onStart={() => {
+            markIntroSeen()
+            dispatch({ type: 'to', screen: 'select' })
+          }}
+        />
+      )}
+
       {state.screen === 'select' && <InstallPrompt />}
 
       {state.screen === 'select' && (
