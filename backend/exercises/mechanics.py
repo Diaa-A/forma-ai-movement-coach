@@ -79,6 +79,9 @@ class Movement:
     travel_rel_floor: float = 0.35
     min_flexion: float = 30.0      # degrees off straight before a dip counts
     flexion_rel_floor: float = 0.4
+    # How much of a rep's window has to survive the per-frame validity gate for
+    # the rep to be scoreable at all. See _windows_mostly_valid.
+    min_valid_fraction: float = 0.6
 
     # how far either side of the kinematic bottom to look for peak flexion
     eval_window_sec: float = 0.4
@@ -258,6 +261,43 @@ def axis_looks_rotated(movement: Movement, tilt) -> bool:
 # which detected bottoms are actually reps
 # ---------------------------------------------------------------------------
 
+
+def _windows_mostly_valid(movement: Movement, reps, angles_per_frame, side):
+    """Drop segments that are mostly frames the validity gate already rejects.
+
+    Found by a participant in the first testing round, on a push-up clip. Their
+    last "rep" was the moment they got up and walked back to the phone: the pose
+    estimate came apart, the body line swung to 170 degrees and back, and the one
+    frame in that window that squeaked under the plausibility ceiling at 40
+    degrees was picked as the deepest and reported to them as the worst form of
+    the set, with hips and shoulders flagged. Nine genuine reps scored zero and
+    the only thing the report pointed at was them reaching for the camera.
+
+    The per-frame gate was doing its job -- 42 of that window's 75 frames were
+    already being discarded. Nothing was asking whether a rep built out of mostly
+    discarded frames should exist. Measured on that clip: the nine real reps were
+    100% valid, the tenth 73%, and the false one 44%.
+
+    Applied before the travel and flexion gates rather than after, for the reason
+    the travel ceiling exists (Decision 25): both of those calibrate a ratio
+    against the clip's own maximum, and a segment of tracking noise in the sample
+    distorts what "normal" means for every real rep beside it.
+    """
+    if angles_per_frame is None:
+        return list(reps)
+
+    kept = []
+    for (s, b, e) in reps:
+        window = range(s, min(e, len(angles_per_frame) - 1) + 1)
+        total = sum(1 for _ in window)
+        if total == 0:
+            continue
+        valid = sum(1 for f in window if movement.is_valid(angles_per_frame[f], side))
+        if valid / total >= movement.min_valid_fraction:
+            kept.append((s, b, e))
+    return kept
+
+
 def keep_real_reps(movement: Movement, reps, travel_y, scale,
                    angles_per_frame=None, side="left", fps=30.0):
     """Filter detected bottoms down to genuine repetitions.
@@ -285,6 +325,14 @@ def keep_real_reps(movement: Movement, reps, travel_y, scale,
     travel test existed for: a set of uniformly shallow reps still counts, and is
     then flagged as shallow rather than silently dropped.
     """
+    if not reps:
+        return []
+
+    # Plausibility first, on the same principle as the travel ceiling below: a
+    # segment that is mostly frames the validity gate rejects is not a rep, and
+    # leaving it in the sample would let it set the scale the ratios calibrate
+    # against.
+    reps = _windows_mostly_valid(movement, list(reps), angles_per_frame, side)
     if not reps:
         return []
 

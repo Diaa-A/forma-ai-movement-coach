@@ -275,3 +275,57 @@ def test_pushup_still_rejects_a_dip_where_the_elbow_did_not_bend():
                                     angles_per_frame=angles, side="left", fps=30.0)
     assert (0, 30, 59) not in kept
     assert len(kept) == 2
+
+
+# ---------------------------------------------------------------------------
+# a segment made of frames the validity gate already rejects is not a rep
+# ---------------------------------------------------------------------------
+# Reported by a participant in the first testing round: their last "rep" was
+# them getting up and walking back to the phone. The pose estimate came apart,
+# and the single frame in that window that squeaked under the plausibility
+# ceiling was picked as the deepest and reported as the worst form of the set.
+# Nine clean reps scored zero; the only thing the report pointed at was them
+# reaching for the camera.
+#
+# Measured on that clip, and on this project's own push-up reference, the two
+# populations do not overlap: real reps are 100% valid frames, artefacts run
+# 36-54%. The floor sits at 60% in a 46-point gap rather than against either
+# edge.
+
+def _window(valid, invalid):
+    """A rep window: `valid` scoreable frames then `invalid` implausible ones."""
+    good = {"elbow_left": 90.0, "body_left": 4.0}
+    bad = {"elbow_left": 170.0, "body_left": 175.0}   # body line past the ceiling
+    return [dict(good)] * valid + [dict(bad)] * invalid
+
+
+def test_a_window_of_mostly_invalid_frames_is_not_a_rep():
+    from backend.exercises import mechanics
+    from backend.exercises.pushup import PUSHUP
+
+    angles = _window(33, 42)            # the participant's rep 11, 44% valid
+    kept = mechanics.keep_real_reps(PUSHUP, [(0, 20, 74)], travel_y=None, scale=1.0,
+                                    angles_per_frame=angles, side="left", fps=30.0)
+    assert kept == []
+
+
+def test_a_clean_rep_is_kept():
+    from backend.exercises import mechanics
+    from backend.exercises.pushup import PUSHUP
+
+    angles = _window(50, 0)
+    kept = mechanics.keep_real_reps(PUSHUP, [(0, 25, 49)], travel_y=None, scale=1.0,
+                                    angles_per_frame=angles, side="left", fps=30.0)
+    assert len(kept) == 1
+
+
+def test_a_rep_with_a_few_bad_frames_survives():
+    """Tracking drops a handful of frames on almost every real clip. The gate has
+    to tolerate that, or it becomes a second detection-rate test."""
+    from backend.exercises import mechanics
+    from backend.exercises.pushup import PUSHUP
+
+    angles = _window(40, 10)            # 80% valid
+    kept = mechanics.keep_real_reps(PUSHUP, [(0, 25, 49)], travel_y=None, scale=1.0,
+                                    angles_per_frame=angles, side="left", fps=30.0)
+    assert len(kept) == 1
