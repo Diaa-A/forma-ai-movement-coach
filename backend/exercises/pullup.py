@@ -24,11 +24,12 @@ first is the reason this file exists at all:
 **Calibrated against all 25 Penn Action sequences on 10 September**, 26 scored
 repetitions. The rep-gating numbers survived. The form thresholds did not, and
 the reason is worth stating precisely: it is not that the pipeline cannot measure
-a pull-up. Elbow error against ground truth is 5.5 degrees at deep flexion and
-6.2 at full extension, better than the push-up's 8.1. The problem is that Penn
-Action labels *what the action is*, not *whether it was done well*, so there are
-no incomplete repetitions to calibrate a boundary against. A threshold set here
-would separate nothing that has been shown to need separating.
+a pull-up. Overall elbow error is 9.1 degrees median, comparable to the push-up's
+8.1, and in the deep-flexion band where a height cue would actually read it drops
+to 5.5. The problem is that Penn Action labels *what the action is*, not *whether
+it was done well*, so there are no incomplete repetitions to calibrate a boundary
+against. A threshold set here would separate nothing that has been shown to need
+separating.
 
 So no cue fires on form. The exercise counts repetitions, declares what it cannot
 assess, and says so — see `pullup_cues.py` and the audit in the engineering notes.
@@ -58,10 +59,12 @@ ELBOW_TARGET_TOP = 40.0
 
 # Deliberately absent: a height-flag threshold and a hang-extension threshold.
 #
-# Both are measurable. Elbow error against Penn Action ground truth is 5.5 deg at
-# deep flexion and 6.2 at full extension, against the push-up's 8.1 -- this is the
-# better-measured of the two exercises. What is missing is any labelled example of
-# the fault. Penn Action says an action is a pull-up; it does not say whether it
+# Both are measurable. Elbow error against Penn Action ground truth is 5.5 deg in
+# the deep-flexion band and 6.2 at full extension -- the two bands a height cue and
+# an extension cue would read. Overall the pull-up's elbow median is 9.1 deg,
+# against the push-up's 8.1, so the two exercises are measured about as well as
+# each other and the bands that matter here happen to be the accurate ones. What
+# is missing is any labelled example of the fault. Penn Action says an action is a pull-up; it does not say whether it
 # was a good one. Across 26 scored reps the elbow at the top ran 2.8 to 73.8 with
 # no marked boundary anywhere in it, and a number chosen from that range would
 # separate a population from itself.

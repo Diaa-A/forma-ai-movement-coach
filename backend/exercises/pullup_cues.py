@@ -6,9 +6,9 @@ detector is not trustworthy carrying `available: False`.
 
 **Four of the five cues here are parked, which is the outcome of calibration
 rather than an oversight.** WP-08 step 2 measured all 25 Penn Action sequences
-and found the pipeline reads a pull-up well — elbow error is 5.5 degrees at deep
-flexion against the push-up benchmark's 8.1 — but Penn Action labels what an
-action is, not whether it was done well. There is no incomplete repetition in the
+and found the pipeline reads a pull-up well — 5.5 degrees of elbow error in the
+deep-flexion band these cues would read, against 9.1 overall — but Penn Action
+labels what an action is, not whether it was done well. There is no incomplete repetition in the
 set to calibrate a boundary against, and across 26 repetitions the elbow at the
 top ran 2.8 to 73.8 degrees in one unbroken spread. A threshold placed in that
 range would separate a population from itself.

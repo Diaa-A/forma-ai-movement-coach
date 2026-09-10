@@ -143,6 +143,9 @@ def _default_output(action):
 ANGLES_OF_INTEREST = {
     "squat": ("knee", "hip"),
     "pushup": ("elbow",),
+    # The pull-up is judged on the elbow too, but for the opposite reason: the
+    # push-up reads it at the bottom of the movement and the pull-up at the top.
+    "pullup": ("elbow",),
 }
 
 

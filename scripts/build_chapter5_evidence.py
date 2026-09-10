@@ -37,7 +37,13 @@ OUT = ROOT / "report" / "chapter5"
 SOURCES = {
     "squat":  ROOT / "data" / "outputs" / "penn_eval" / "metrics.json",
     "pushup": ROOT / "data" / "outputs" / "penn_eval_pushup" / "metrics.json",
+    "pullup": ROOT / "data" / "outputs" / "penn_eval_pullup" / "metrics.json",
 }
+
+# Column order and headings for the comparison table. Driven off one list so
+# adding a fourth exercise is an entry here rather than an edit in six places --
+# which is what adding the third one turned out to be.
+ACTIONS = [("squat", "squat"), ("pushup", "push-up"), ("pullup", "pull-up")]
 
 
 # The code whose behaviour determines these numbers. Anything outside this list
@@ -175,25 +181,27 @@ def build() -> dict:
 
 
 def table(d: dict) -> str:
+    present = [(a, lab) for a, lab in ACTIONS if a in d["exercises"]]
+
     L = []
     L.append("Penn Action benchmark — 2D pose accuracy against ground truth")
     L.append(f"generated {d['generated']}  commit {d['commit']}")
     L.append("")
     L.append("reproduce with:")
-    L.append("    python scripts/eval_penn_action.py --action squat  --limit 25")
-    L.append("    python scripts/eval_penn_action.py --action pushup --limit 25")
+    for a, _ in present:
+        L.append(f"    python scripts/eval_penn_action.py --action {a} --limit 25")
     L.append("    python scripts/build_chapter5_evidence.py")
     L.append("")
-    hdr = f"{'metric':<34}{'squat':>16}{'push-up':>16}"
+    hdr = f"{'metric':<34}" + "".join(f"{lab:>16}" for _, lab in present)
     L.append(hdr)
     L.append("-" * len(hdr))
 
     def row(label, fn, fmt="{:.3f}"):
-        vals = []
-        for a in ("squat", "pushup"):
+        cells = ""
+        for a, _ in present:
             v = fn(d["exercises"].get(a, {}))
-            vals.append(fmt.format(v) if isinstance(v, (int, float)) else str(v))
-        L.append(f"{label:<34}{vals[0]:>16}{vals[1]:>16}")
+            cells += f"{(fmt.format(v) if isinstance(v, (int, float)) else str(v)):>16}"
+        L.append(f"{label:<34}{cells}")
 
     row("sequences", lambda e: e.get("sequences"), "{:d}")
     row("frames evaluated", lambda e: e.get("frames_evaluated"), "{:d}")
@@ -207,12 +215,12 @@ def table(d: dict) -> str:
 
     L.append("joint-angle error, degrees (the metric the cue layer depends on)")
     L.append(f"  {'joint':<16}{'mean':>10}{'median':>10}{'n':>8}   exercise")
-    for a in ("squat", "pushup"):
+    for a, _ in present:
         for joint, s in sorted(d["exercises"].get(a, {}).get("angle_error_degrees", {}).items()):
             L.append(f"  {joint:<16}{s['mean']:>10.1f}{s['median']:>10.1f}{s['n']:>8}   {a}")
     L.append("")
 
-    for a in ("squat", "pushup"):
+    for a, _ in present:
         ex = d["exercises"].get(a, {}).get("excluded_sequences", [])
         if ex:
             L.append(f"{a}: sequences yielding nothing — " +
@@ -222,10 +230,18 @@ def table(d: dict) -> str:
     L.append("Read the median alongside the mean for push-up. The gap between 20.0 and")
     L.append("8.3 px is a heavy tail: most frames track about as well as squat frames and")
     L.append("a few track very badly. The mean alone misrepresents typical performance;")
-    L.append("the median alone hides a real failure mode.")
+    L.append("the median alone hides a real failure mode. The pull-up has the same")
+    L.append("shape, less severely — 11.5 against a median of 6.1.")
     L.append("")
     L.append("PCK is lower for push-up (0.799 vs 0.871) and the comparison is not")
     L.append("like-for-like — see pck_definition in the JSON.")
+    L.append("")
+    L.append("The pull-up is the best-tracked of the three on every aggregate measure:")
+    L.append("95.9% detection against 84-87%, the lowest MPJPE either way, the highest")
+    L.append("PCK. It is also the exercise that ships with four of its five cues parked,")
+    L.append("because Penn Action holds no incomplete repetition to calibrate a form")
+    L.append("threshold against. How well a movement can be MEASURED and how much can be")
+    L.append("SAID about it are independent, and this is the clearest case of it.")
     return "\n".join(L)
 
 
