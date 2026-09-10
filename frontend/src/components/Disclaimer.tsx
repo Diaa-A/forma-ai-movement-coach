@@ -3,7 +3,7 @@
  *
  * Rendered on every screen and deliberately not dismissible. The system measures
  * joint angles and reads them against calibrated heuristics; it does not diagnose
- * anything, and BUILD_REFERENCE.md 3 makes that a locked constraint rather than a
+ * anything, and that is a locked constraint on the project rather than a
  * preference. Keeping it in one component means there's no screen where someone
  * forgot to add it.
  */

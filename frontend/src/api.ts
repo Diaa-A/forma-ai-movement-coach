@@ -1,9 +1,9 @@
 // The only module that talks to the backend.
 //
-// Kept deliberately small and isolated: the plan (docs/WP02_PWA_PLAN.md 6) leaves
-// open whether /analyze stays a single synchronous POST or becomes submit-and-poll
-// once we know what request duration the host actually allows. If that changes,
-// it changes here and nowhere else.
+// Kept deliberately small and isolated: it is still open whether /analyze stays a
+// single synchronous POST or becomes submit-and-poll once we know what request
+// duration the host actually allows. If that changes, it changes here and
+// nowhere else.
 //
 // Paths are relative on purpose. In dev Vite proxies them to :8000; in production
 // FastAPI serves the built app from the same origin. Neither case needs a base url,

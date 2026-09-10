@@ -26,7 +26,7 @@ from PIL import Image, ImageDraw
 OUT_DIR = Path(__file__).resolve().parents[1] / "frontend" / "public" / "icons"
 
 # The dark-scheme hex fallbacks from styles.css, so the icon matches the app.
-# Those are generated from OKLCH now (docs/UI_DESIGN_PLAN.md 2.3) rather than
+# Those are generated from OKLCH now rather than
 # picked by hand, so if the palette moves again, take the numbers from the same
 # place rather than sampling a screenshot.
 BG = (16, 20, 26)          # --bg        oklch(0.190 0.014 258)
