@@ -300,6 +300,13 @@ def _validate(parsed: dict) -> dict:
 
 
 def _parse_llm_response(api_response: dict) -> dict:
+    """Pull the report JSON out of a Groq response.
+
+    Both failure modes raise, because the caller's fallback is the dry-run
+    report and half a parsed report is worse than none: the envelope can come
+    back shaped differently from the documented one, and the model can ignore
+    the schema and send prose instead. Prose is the one that actually happens.
+    """
     try:
         content = api_response["choices"][0]["message"]["content"]
     except (KeyError, IndexError) as e:
@@ -462,8 +469,8 @@ def generate_coaching_report(evaluation: Evaluation,
         # echo back — in front of the user and on a public URL.
         #
         # `source` already carries the fact of the fallback, and the UI turns it
-        # into a plain sentence saying the wording is the system's own. That is the
-        # honest signal; this one was only ever noise on top of it.
+        # into a plain sentence saying the wording is the system's own, which is
+        # all the user needs to know.
         log.warning("coaching LLM call failed, falling back to cue wording",
                     exc_info=True)
         fallback = _dry_run_report(evaluation)

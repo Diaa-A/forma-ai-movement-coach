@@ -94,6 +94,13 @@ def run_model(action: str, model: str, seq_ids) -> dict:
 
 
 def score_landmarks(seq, landmarks, sizes, idxs) -> Accumulator:
+    """Score landmarks extracted elsewhere against one sequence's ground truth.
+
+    Split out of evaluate_sequence so the filter ablation can run MediaPipe once
+    and score both arms off the same detections. Extracting twice would let
+    detector nondeterminism into a comparison that is supposed to isolate the
+    filter.
+    """
     acc = Accumulator()
     for k, i in enumerate(idxs):
         w, h = sizes[k]
@@ -131,6 +138,13 @@ def jitter(landmarks, sizes) -> list:
 
 
 def run_filter_ablation(action: str, seq_ids) -> dict:
+    """One Euro on against off, over the same extracted landmarks.
+
+    Both arms score identical detections, so the only thing separating them is
+    the filter. That is also why the detection rates get compared at the end: if
+    they ever differ the arms did not share their input, and the comparison is
+    void rather than merely odd.
+    """
     raw_all, smoothed_all = Accumulator(), Accumulator()
     jit_raw, jit_smooth = [], []
     moved = []

@@ -233,16 +233,16 @@ def evaluate_squat(angles_per_frame, reps, side, fps, phase_per_frame=None,
                    landmarks=None):
     """Run Layer 1 over the pipeline output. Returns an Evaluation.
 
-    Args:
-        angles_per_frame: list of dicts (from squat_angles_per_frame).
-        reps: list of (start, bottom, end) tuples from segment_reps.
-        side: 'left' or 'right' (chosen side for the primary knee key).
-        fps: video frames per second (used for tempo cues).
-        phase_per_frame: optional list of phase tags (from label_phases). If
-            None, tempo cues are skipped.
-        landmarks: optional (n_frames, 33, 4) array. When given, cues that depend
-            on a low-visibility joint are suppressed (confidence weighting) — most
-            importantly the left/right comparison when the far leg is occluded.
+    `angles_per_frame` comes from squat_angles_per_frame, `reps` from
+    segment_reps as (start, bottom, end) tuples, and `side` picks which knee
+    counts as primary. `fps` is only read by the tempo cues.
+
+    The two optional arguments each switch something off when missing. Without
+    `phase_per_frame` (from label_phases) the tempo cues are skipped. Without
+    `landmarks`, an (n_frames, 33, 4) array, there is no confidence weighting,
+    so cues fire on joints the model may be guessing at — the one that matters
+    is the left/right comparison, which means nothing when the far leg is
+    occluded.
     """
     knee_primary, knee_secondary = _knee_keys(side)
     shin_key = "shin_left" if side == "left" else "shin_right"

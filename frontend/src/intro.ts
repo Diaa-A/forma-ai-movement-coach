@@ -1,13 +1,13 @@
 // Whether this device has seen the one-time explainer.
 //
-// Same shape and the same failure mode as consent.ts, and deliberately a
-// separate key: consent is a record of what someone agreed to and is re-asked
-// when the retention period changes, while this is only a note that a screen has
-// been shown. Sharing one key would mean a change to the retention policy
-// re-explained the app, or a copy change re-asked for consent.
+// Same shape and failure mode as consent.ts, on a deliberately separate key.
+// Consent records what someone agreed to and is re-asked when the retention
+// period changes; this is only a note that a screen has been shown. One shared
+// key would mean a retention change re-explained the app, or a copy change
+// re-asked for consent.
 //
-// localStorage throws in a private window. Swallowing that means the explainer
-// shows again, which is the harmless direction.
+// localStorage throws in a private window; swallowing that shows the explainer
+// again, which is the harmless direction.
 
 const KEY = 'intro-v1'
 

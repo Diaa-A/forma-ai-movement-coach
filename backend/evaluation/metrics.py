@@ -141,6 +141,8 @@ class Accumulator:
 
     def add_frame(self, pred_xy, gt_xy, gt_vis, ref_len, alpha=0.2,
                   detected=True):
+        # a frame MediaPipe found nothing in still counts in frames_evaluated,
+        # or the detection rate ends up measuring only the frames that worked
         self.frames_evaluated += 1
         if detected:
             self.frames_detected += 1
@@ -155,6 +157,12 @@ class Accumulator:
             self.angle_errors.setdefault(k, []).append(v)
 
     def summary(self):
+        """Everything the benchmark reports, as one dict.
+
+        Mean and median are both here deliberately. Push-up pixel error came out
+        at 20.0 mean against 8.3 median -- a long tail off a handful of badly
+        tracked frames -- so either number on its own tells a different story.
+        """
         joint_means = {
             n: (float(np.mean(v)) if v else None)
             for n, v in self.joint_errors.items()
