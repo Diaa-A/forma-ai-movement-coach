@@ -197,7 +197,9 @@ def test_body_scale_uses_true_length_for_a_horizontal_body():
 def test_registry_wires_every_exercise_completely():
     """A half-registered exercise would fail deep inside the pipeline rather than
     here, so check the entries are whole."""
-    assert exercise_ids() == ["pushup", "squat"]
+    # Updated when the pull-up landed in WP-08. The list is asserted rather than
+    # counted so that adding an exercise has to be a deliberate edit here.
+    assert exercise_ids() == ["pullup", "pushup", "squat"]
     for name, spec in EXERCISES.items():
         assert spec.profile.name == name
         assert callable(spec.angles) and callable(spec.evaluate)

@@ -12,10 +12,12 @@ of an exercise.
 from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional
 
-from ..pipeline.angles import pushup_angles_per_frame, squat_angles_per_frame
+from ..pipeline.angles import (pullup_angles_per_frame, pushup_angles_per_frame,
+                               squat_angles_per_frame)
 from .base import ExerciseProfile
 from .mechanics import Movement
-from . import pushup, squat
+from . import pullup, pushup, squat
+from .pullup_cues import PULLUP_PROFILE, evaluate_pullup
 from .pushup_cues import PUSHUP_PROFILE, evaluate_pushup
 from .squat_cues import SQUAT_PROFILE, evaluate_squat
 
@@ -56,6 +58,14 @@ EXERCISES: Dict[str, ExerciseSpec] = {
         evaluate=evaluate_pushup,
         flag_frames=pushup.flag_frames,
         caption=pushup.frame_caption,
+    ),
+    "pullup": ExerciseSpec(
+        profile=PULLUP_PROFILE,
+        movement=pullup.PULLUP,
+        angles=pullup_angles_per_frame,
+        evaluate=evaluate_pullup,
+        flag_frames=pullup.flag_frames,
+        caption=pullup.frame_caption,
     ),
 }
 
