@@ -34,7 +34,7 @@ FROM python:3.13-slim-bookworm AS runtime
 
 # 3.13 rather than the 3.11 the original spec named: MediaPipe 0.10.35 publishes
 # 3.13 wheels, so every pinned dependency installs without a local build step.
-# Reasoning in BUILD_REFERENCE 5, "Known deviations from the locked spec".
+# The README covers why in more detail.
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
