@@ -63,6 +63,25 @@ class Movement:
     # the wrong side of the cut for this movement -- see body_axis_tilt below.
     body_axis: str = "vertical"
 
+    # Does the hard part of the rep happen at the TOP of the body's travel?
+    #
+    # For a squat and a push-up it happens at the bottom, and detect_bottoms
+    # looks for exactly that: the frame where the body stops descending and
+    # starts coming back up. A pull-up is the first movement here where the two
+    # do not coincide. Peak elbow flexion lands at the top of the travel range on
+    # 6 of 6 Penn Action sequences measured (normalised position 0.00-0.16, where
+    # 0 is the body at its highest), so run unchanged the detector would return
+    # the dead hang BETWEEN reps and everything keyed off the rep bottom -- the
+    # eval window, the deepest frame, worst/best selection, the tempo cues --
+    # would read the wrong frame and say nothing about it.
+    #
+    # The runner negates the travel signal when this is set, which puts the
+    # effort point back where the shared machinery expects to find it. Phase
+    # labels stay positional as a result: for a pull-up "descent" is the pull and
+    # "ascent" is the lowering, which is the opposite of the other two and is why
+    # the pull-up cue set keys its tempo cue accordingly.
+    effort_at_top: bool = False
+
     # --- rep gating, all as multiples of the body scale or degrees of bend ---
     #
     # Whether body travel is a usable signal at all. It is for a squat: the hips
@@ -481,6 +500,24 @@ def joints_visible(landmarks, frame, names, threshold) -> bool:
         if not np.isfinite(v) or v < threshold:
             return False
     return True
+
+
+def travel_for_phase(movement: Movement, travel_y):
+    """The travel signal as phase detection should see it.
+
+    `detect_bottoms` looks for the frame where the body stops descending and
+    starts rising, because that is where a squat and a push-up put the hard part
+    of the rep. A pull-up puts it at the other extreme, so for those movements
+    the signal is negated and the top becomes a bottom as far as the detector is
+    concerned.
+
+    Doing it here rather than inline in the runner is what makes it testable:
+    getting this backwards produces a plausible rep count built entirely on the
+    wrong frames, which no amount of reading the output would reveal.
+    """
+    if not movement.effort_at_top:
+        return travel_y
+    return -np.asarray(travel_y, dtype=np.float64)
 
 
 def travel_series(landmarks, left_name, right_name):

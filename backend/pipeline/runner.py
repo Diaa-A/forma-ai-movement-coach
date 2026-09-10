@@ -153,6 +153,10 @@ def run_pipeline(input_path, output_root, exercise: str = "squat",
 
     # -- phase detection
     hip_y = mechanics.travel_series(lm_smooth, *spec.travel_landmarks)
+    # Flipped for a movement whose effort lands at the top of the travel, so the
+    # detector finds the right frame. The rep gate is unaffected either way: it
+    # measures max minus min, which does not care about sign.
+    hip_y = mechanics.travel_for_phase(movement, hip_y)
     hip_y_smooth = smooth_series(hip_y, pose_data["timestamps"],
                                  min_cutoff=0.5, beta=0.001)
     bottoms = detect_bottoms(hip_y_smooth, min_separation=max(3, int(fps * 0.4)))

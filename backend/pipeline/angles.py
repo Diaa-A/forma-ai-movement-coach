@@ -199,3 +199,54 @@ def pushup_angles_per_frame(landmarks):
             "spine":         spine,
         })
     return out
+
+
+def pullup_angles_per_frame(landmarks):
+    """Per-frame pull-up angle dict.
+
+    Same primitives again, and a shorter list than the push-up's because a
+    hanging body offers less that is worth measuring. Keys:
+
+        elbow_left / elbow_right   shoulder-elbow-wrist, the angle that flexes.
+                                   Unlike the push-up this reaches its MINIMUM at
+                                   the top of the movement, with the chin at the
+                                   bar
+        shoulder_left / shoulder_right
+                                   elbow-shoulder-hip, how far the upper arm sits
+                                   from the torso. Wide on a wide grip, narrow on
+                                   a chin-up
+        trunk                      torso angle from image vertical. A hanging
+                                   body reads near zero; swing and kipping move
+                                   it, which is the only handle on either that a
+                                   single frame gives
+
+    No body-line key on purpose. The push-up's shoulder-hip-ankle measure asks
+    whether the body held a plank, and a pull-up with the knees tucked -- which is
+    how most people hang -- would read as a severe fault while being perfectly
+    correct.
+    """
+    out = []
+    for f in range(len(landmarks)):
+        fr = landmarks[f]
+
+        elbow_l = joint_angle(_xy(fr, LM["left_shoulder"]),  _xy(fr, LM["left_elbow"]),  _xy(fr, LM["left_wrist"]))
+        elbow_r = joint_angle(_xy(fr, LM["right_shoulder"]), _xy(fr, LM["right_elbow"]), _xy(fr, LM["right_wrist"]))
+
+        sh_l = joint_angle(_xy(fr, LM["left_elbow"]),  _xy(fr, LM["left_shoulder"]),  _xy(fr, LM["left_hip"]))
+        sh_r = joint_angle(_xy(fr, LM["right_elbow"]), _xy(fr, LM["right_shoulder"]), _xy(fr, LM["right_hip"]))
+
+        ls = np.array(_xy(fr, LM["left_shoulder"]))
+        rs = np.array(_xy(fr, LM["right_shoulder"]))
+        lh = np.array(_xy(fr, LM["left_hip"]))
+        rh = np.array(_xy(fr, LM["right_hip"]))
+        mid_sh = (ls + rs) / 2.0
+        mid_hp = (lh + rh) / 2.0
+
+        trunk = angle_from_vertical(mid_sh, mid_hp)
+
+        out.append({
+            "elbow_left":    elbow_l, "elbow_right":    elbow_r,
+            "shoulder_left": sh_l,    "shoulder_right": sh_r,
+            "trunk":         trunk,
+        })
+    return out
