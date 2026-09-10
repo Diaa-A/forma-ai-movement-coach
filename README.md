@@ -1,13 +1,11 @@
-# AI Fitness & Movement Coach
+# Forma — AI Fitness & Movement Coach
 
 CM3070 final project — server-side Python pipeline that analyses a user-uploaded
-exercise video and returns coaching feedback. Live build reference is `BUILD_REFERENCE.md`;
-the original spec it was synced from is `docs/CM3070_Technical_Spec.md`.
+exercise video and returns coaching feedback. The PWA ships as **Forma**.
 
-**Start here:** `BUILD_REFERENCE.md` for what the system is and what is built · the Setup
-section below to get it running · `docs/CM3070_PROJECT_STATE.md` for delivery
-state and the code review · `report/CM3070_Decision_Log.md` for why anything is
-the way it is.
+**Start here:** the Status table below for what is built, then Quick start to get
+it running. Architecture is in section 2 of this file and the reasoning behind
+each design choice is in the report rather than the repository.
 
 ## Status
 
@@ -20,7 +18,8 @@ the way it is.
 | E — FastAPI server with `/analyze` multipart endpoint | done |
 | F — PWA frontend | done; deployed on Railway and installable on iOS |
 | G — push-up / pull-up analysers | push-up done and benchmarked; pull-up not started (WP-08) |
-| H — Penn Action evaluation harness | done, squat and push-up — results in `report/chapter5/` |
+| H — Penn Action evaluation harness | done, squat and push-up |
+| I — user testing round 1 | open; participants hold the live link, responses arriving |
 
 ## Quick start
 
@@ -92,7 +91,7 @@ Returns JSON with URLs to artefacts served from `/results/<job_id>/`.
 PY -m pytest
 ```
 
-202 tests: angle maths vs known geometry, One Euro behaviour, phase detection on
+230 tests: angle maths vs known geometry, One Euro behaviour, phase detection on
 synthetic signals, rep filter, cue gating, the API's rejection branches, and an
 end-to-end smoke test (the tests that need `data/test_videos/` skip themselves on
 a clean checkout, where test videos are gitignored — a skip there is expected,
@@ -117,9 +116,12 @@ serves the frontend so they share an origin. Railway detects it automatically;
 **Why Railway.** The binding constraint is request duration, not price: a 20 s
 clip takes ~12 s to analyse and a 4K one takes longer, so any host with a 30 s
 request cap is unusable. Railway allows 5 minutes on public networking. Measured
-usage for this app is ~0.1 GB idle and 237 MB peak per analysis, which at
-Railway's published per-second rates comes to roughly $1/month — inside the $5
-credit that comes with the $5/month Hobby plan.
+usage is ~0.1 GB idle and 238–774 MB peak per analysis depending on input
+resolution. On the original 954 MB container that came to roughly $1/month at
+Railway's published per-second rates, inside the $5 Hobby credit. The container
+was resized during Round 1 after repeated analyses ran it out of memory, so
+treat that figure as the old one and read the current rate off the dashboard
+before quoting it anywhere.
 
 ### First deploy
 
@@ -127,9 +129,14 @@ credit that comes with the $5/month Hobby plan.
    pick this repository. It is private, so you will be asked to grant access —
    keep the repository private (it is assessed coursework).
 2. Railway reads `railway.json` and `Dockerfile`; no build settings to fill in.
-3. Under **Variables**, add `GROQ_API_KEY`. Nothing else is required — CORS stays
-   empty on purpose (the app and the API share an origin, so nothing is ever
-   cross-origin), and `DATA_ROOT` defaults to `data/` inside the image.
+3. Under **Variables**, add `GROQ_API_KEY` and `GROQ_MODEL`. The model is not
+   optional any more — Groq retired `llama-3.3-70b-versatile` in Aug 2026, and
+   without an override coaching quietly falls back to cue wording while
+   `/health` still reports green. `openai/gpt-oss-120b` is what production
+   runs. Add `FEEDBACK_FORM_URL` only while a testing round is open. CORS
+   stays empty on purpose (the app and the API share an origin, so nothing is
+   ever cross-origin), and `DATA_ROOT` defaults to `data/` inside the image.
+   Railway needs a redeploy to pick up a variable change.
 4. Under **Settings → Networking**, generate a domain. HTTPS is issued
    automatically, which the PWA needs for install and for `MediaRecorder`.
 5. Set a **usage limit** in account settings. Hobby is billed by usage with no
@@ -160,10 +167,13 @@ Per-frame inference dominates and does not get cheaper on a warm container.
   `/results/...` URL a participant still has open stops working. Do not redeploy
   mid-session. This is not the deletion guarantee either — that is WP-07, and it
   has to ship before anyone is asked to consent to it.
-- **One analysis runs at a time** (`MAX_CONCURRENT_ANALYSES`, default 1). The
-  container has 954 MB and one analysis peaks at 238–774 MB depending on input
-  resolution, so two of anything large will not fit. Past the limit, requests get
-  a 503, which the app renders as a retryable server error.
+- **One analysis runs at a time** (`MAX_CONCURRENT_ANALYSES`, default 1). Past
+  the limit requests get a 503, which the app renders as a retryable server
+  error. The default was chosen when the container had 954 MB against a
+  238–774 MB peak per analysis, so two large ones could not fit. `/health` now
+  reports a 7,629 MB limit, so memory no longer forces the value down to 1 — it
+  stays there because nothing has yet measured what raising it does to latency
+  under load.
 
 ## Setup
 
@@ -187,9 +197,13 @@ python3.13 -m venv .venv
 cp .env.example .env
 ```
 
-Then open `.env` and fill in the keys:
+Then open `.env` and fill in the keys — `.env.example` documents every variable
+and why it exists, including the ones not listed here:
 - `GROQ_API_KEY` — Phase C live LLM and Phase D transcription. The system runs
   without it: pass `--dry-run-coach` and you get the deterministic report instead.
+- `GROQ_MODEL` — set this. The measured default was retired upstream; production
+  runs `openai/gpt-oss-120b`. Rerun `scripts/run_faithfulness.py` before
+  trusting a model the report has not measured.
 - `PEXELS_API_KEY` — only needed for the fixture fetcher.
 
 ### Why Python 3.13 and not the 3.11 in the spec
@@ -226,7 +240,6 @@ Groq-hosted `whisper-large-v3` (Decision 22). This is the offline fallback only.
 
 ```
 .
-├── BUILD_REFERENCE.md                  build reference (read first)
 ├── README.md                  this file
 ├── analyze_squat.py           CLI entry
 ├── .env.example
@@ -243,24 +256,33 @@ Groq-hosted `whisper-large-v3` (Decision 22). This is the offline fallback only.
 │   │   ├── angles.py          joint angle calcs
 │   │   ├── phase_detection.py velocity zero-crossing + phase labels
 │   │   ├── render.py          skeleton overlay
+│   │   ├── encoder.py         browser-playable MP4 muxing
+│   │   ├── probe.py           reads rotation / duration before decoding
 │   │   ├── coaching.py        Layer 2 — Groq LLM wrapper + dry-run
 │   │   └── whisper_wrapper.py Phase D voice transcription (lazy)
-│   ├── evaluation/            Penn Action loader + MPJPE / PCK metrics
+│   ├── evaluation/            Penn Action loader, MPJPE / PCK, faithfulness checker
 │   ├── exercises/
 │   │   ├── base.py            ExerciseProfile — camera-view / plane gating
+│   │   ├── mechanics.py       shared Movement abstraction (no exercise names here)
+│   │   ├── registry.py        exercise lookup by name
 │   │   ├── squat.py           form scoring + side selection + worst/best
-│   │   └── squat_cues.py      Layer 1 — cue database + evaluator
-│   └── tests/                 202 pytest tests
+│   │   ├── squat_cues.py      Layer 1 — squat cue database + evaluator
+│   │   ├── pushup.py          push-up scoring on the shared Movement
+│   │   └── pushup_cues.py     Layer 1 — push-up cue database + evaluator
+│   └── tests/                 230 pytest tests
 ├── frontend/                  the PWA (React + Vite); built output is served by FastAPI
 │   ├── public/                manifest, service worker, icons
 │   └── src/
 │       ├── api.ts             the only module that talks to the backend
-│       ├── screens/           select → guide → capture → processing → results
-│       └── components/
-├── docs/                      spec, tracker, delivery state, work packages
-├── report/                    decision log 1–23, handoff note, Ch4 + figures
-├── scripts/
+│       ├── consent.ts         per-device consent, keyed to the retention period
+│       ├── motion.ts          view transitions + stagger, no animation library
+│       ├── screens/           intro → select → consent → guide → capture →
+│       │                      processing → results
+│       └── components/        masthead, stepper, status banner, report view
+├── scripts/                   17 harnesses and figure builders; the ones used most:
 │   ├── eval_penn_action.py    Phase H benchmark harness
+│   ├── run_faithfulness.py    Layer-2 faithfulness measurement (spends Groq quota)
+│   ├── rescore_faithfulness.py  re-score stored generations offline, no quota
 │   └── fetch_pexels.py        CC0 fixture downloader
 └── data/
     ├── models/                MediaPipe .task files (lite + full)
