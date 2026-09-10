@@ -21,12 +21,17 @@ first is the reason this file exists at all:
     the plane assignment relative to the other two exercises and is handled in
     `pullup_cues.py` rather than here.
 
-**Thresholds below are provisional.** They come from an eight-sequence probe of
-the Penn Action pull-up subset, which was enough to establish direction and rule
-out the impossible, and is not enough to set a number anyone should trust. WP-08
-step 2 calibrates them against the full 25 sequences. Where a value is a guess it
-says so, rather than being stated with the confidence of the push-up numbers next
-door.
+**Calibrated against all 25 Penn Action sequences on 10 September**, 26 scored
+repetitions. The rep-gating numbers survived. The form thresholds did not, and
+the reason is worth stating precisely: it is not that the pipeline cannot measure
+a pull-up. Elbow error against ground truth is 5.5 degrees at deep flexion and
+6.2 at full extension, better than the push-up's 8.1. The problem is that Penn
+Action labels *what the action is*, not *whether it was done well*, so there are
+no incomplete repetitions to calibrate a boundary against. A threshold set here
+would separate nothing that has been shown to need separating.
+
+So no cue fires on form. The exercise counts repetitions, declares what it cannot
+assess, and says so — see `pullup_cues.py` and the audit in the engineering notes.
 """
 from __future__ import annotations
 
@@ -37,29 +42,58 @@ from . import mechanics
 from .mechanics import Movement
 
 
-# Elbow angle at the top of a complete pull-up. The clips that tracked cleanly
-# reached 17-32 degrees at their highest point, so a full rep closes the elbow
-# well past a right angle. PROVISIONAL: set at 60 so a rep that stops appreciably
-# short is caught, pending step 2.
-ELBOW_TARGET_TOP = 60.0
+# Reference point for ORDERING repetitions within a clip, not a form threshold.
+# The distinction matters and is the whole outcome of step 2.
+#
+# A score has to rank reps so worst_frame and best_frame can pick one, and
+# ranking only needs the ordering to be right. A cue asserts that something was
+# wrong, and that needs a boundary somebody can defend. The first is available
+# here; the second is not.
+#
+# 40 is the 75th percentile of what the calibration set actually reached at the
+# top (n=26: min 2.8, p25 11.1, median 25.4, p75 38.1, max 73.8). Most reps
+# therefore score zero and the ones that came up short of the field sort to the
+# end, which is all the ordering needs.
+ELBOW_TARGET_TOP = 40.0
 
-# Above this at the highest point, the rep did not bring the chin near the bar.
-# PROVISIONAL -- no partial-rep clips have been measured yet, so this is reasoned
-# from the target rather than from a measured gap between good and bad reps.
-HEIGHT_FLAG_ELBOW_ANGLE = 90.0
+# Deliberately absent: a height-flag threshold and a hang-extension threshold.
+#
+# Both are measurable. Elbow error against Penn Action ground truth is 5.5 deg at
+# deep flexion and 6.2 at full extension, against the push-up's 8.1 -- this is the
+# better-measured of the two exercises. What is missing is any labelled example of
+# the fault. Penn Action says an action is a pull-up; it does not say whether it
+# was a good one. Across 26 scored reps the elbow at the top ran 2.8 to 73.8 with
+# no marked boundary anywhere in it, and a number chosen from that range would
+# separate a population from itself.
+#
+# So the height and extension cues are declared and parked, on the same grounds as
+# push-up elbow flare and lockout: measurable in principle, not yet calibrated
+# against anything that would show the threshold was right.
 
-# Below this at the lowest point, the arms never straightened and the rep started
-# from a partial hang. Measured at the hang across eight sequences: median 172,
-# range 151-179. The one clip at 151 is the outlier and may itself be a partial.
-# PROVISIONAL floor at 150.
-HANG_EXTENSION_MIN = 150.0
-
-# An elbow cannot fold flat. Two of the eight sequences produced minima of 0 and
-# 1 degree, which is the pose estimate coming apart rather than a person pulling
-# very hard, and the same class of artefact the push-up guards against with its
-# body-line ceiling. Frames below this are excluded from scoring rather than
-# scored and reported with a straight face.
-MIN_PLAUSIBLE_ELBOW = 15.0
+# Only catches a degenerate reading, and deliberately nothing more.
+#
+# This started at 15 degrees on the reasoning that an elbow cannot fold flat, so
+# the 0 and 1 degree minima seen in the probe had to be the pose estimate coming
+# apart. That reasoning was wrong and the number was doing real damage: on
+# sequence 1172 the top of the pull reads 8 degrees, the floor rejected that
+# frame, and with the effort frame gone the flexion gate saw a straight arm and
+# threw the entire repetition away. Three of 25 clips scored nothing for this
+# reason.
+#
+# Checked against Penn Action ground truth rather than argued about. Elbow error
+# by true angle, 2709 measurements:
+#
+#     true 0-30      n=206   median error  -2.1    abs 5.5
+#     true 30-60     n=475                 +4.5    abs 6.7
+#     true 90-120    n=442                +12.1    abs 15.0
+#     true 150-181   n=625                 +3.1    abs 6.2
+#
+# Deep flexion is the most accurate band of the six, not the least, and ground
+# truth itself holds 206 readings below 30 degrees. These are projected 2D
+# angles: at the top of a pull-up filmed from the front the upper arm and the
+# forearm overlap in projection, so a small angle there is a correct measurement
+# of what the camera can see rather than a failure to track.
+MIN_PLAUSIBLE_ELBOW = 2.0
 
 # Torso lean from vertical. A hanging body reads near zero; swing moves it. Only
 # a proxy for kipping and not calibrated -- `pullup_cues.py` parks the kipping cue
@@ -113,11 +147,9 @@ def frame_valid(angle_dict, side):
 def _score_frame(angle_dict, side):
     """Form deviation at a single frame. Higher is worse.
 
-    Only height for now. Pulling higher than the target is not a fault, so the
-    penalty is one-sided, the same way the push-up treats depth. Grip width and
-    kipping are the other two things a pull-up is judged on and neither has a
-    trustworthy measurement yet -- see the coverage audit -- so scoring on them
-    would be inventing a number to fill the shape of a function.
+    Used to ORDER the reps in a clip so a key frame can be chosen, and for
+    nothing else -- no cue reads it. Pulling higher than the reference is not a
+    fault, so the penalty is one-sided, the same way the push-up treats depth.
     """
     elbow = angle_dict.get(_elbow_key(side))
     if elbow is None or not np.isfinite(elbow):
@@ -128,36 +160,19 @@ def _score_frame(angle_dict, side):
 
 
 def flag_frames(angles_per_frame, reps, side, top_window=8):
-    """Which joints to draw in fault colour, per frame, for the overlay.
+    """Which joints to draw in fault colour. For now, none of them.
 
-    Same rule as the other two: colour follows the measurement so the video shows
-    when form broke down, not just that it did. A rep that did not get high enough
-    marks the elbow and shoulder around its top, and only around its top, because
-    the hang below it was not the problem.
+    A red joint on the overlay is an assertion that something was wrong there,
+    and §15.7 already established that an unfounded claim is worse than silence:
+    silence is ambiguous, but a fault marking reads as a diagnosis. With no
+    calibrated threshold there is nothing to assert, so the skeleton draws in the
+    neutral colour throughout and the report says what was not assessed instead.
+
+    The signature and the per-frame shape are kept so the renderer needs no
+    special case, and so this becomes a real implementation the moment a cue has
+    a threshold behind it.
     """
-    n = len(angles_per_frame)
-    out = [set() for _ in range(n)]
-    elbow_key = _elbow_key(side)
-
-    for (s, b, e) in reps:
-        highest, elbow_min = None, None
-        for i in range(max(0, s), min(n, e + 1)):
-            if not frame_valid(angles_per_frame[i], side):
-                continue
-            v = angles_per_frame[i].get(elbow_key)
-            if v is None or not np.isfinite(v):
-                continue
-            if elbow_min is None or v < elbow_min:
-                highest, elbow_min = i, v
-        if highest is None or elbow_min <= HEIGHT_FLAG_ELBOW_ANGLE:
-            continue
-        lo = max(0, highest - top_window)
-        hi = min(n - 1, highest + top_window)
-        for i in range(lo, hi + 1):
-            if frame_valid(angles_per_frame[i], side):
-                out[i] |= {f"{side}_elbow", f"{side}_shoulder"}
-
-    return out
+    return [set() for _ in range(len(angles_per_frame))]
 
 
 # ---------------------------------------------------------------------------

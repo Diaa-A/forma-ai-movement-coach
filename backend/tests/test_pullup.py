@@ -83,20 +83,25 @@ def test_only_the_pullup_inverts_its_travel():
     assert np.allclose(mechanics.travel_for_phase(pullup.PULLUP, y), -y)
 
 
-@pytest.mark.parametrize("elbow", [0.0, 1.0, 14.9])
-def test_an_elbow_that_cannot_fold_that_far_is_not_scored(elbow):
-    """Two of the eight probed sequences bottomed out at 0 and 1 degrees.
+@pytest.mark.parametrize("elbow", [8.0, 14.9, 17.0, 27.4])
+def test_a_deeply_folded_elbow_is_a_measurement_not_a_glitch(elbow):
+    """The floor was 15 degrees and that was wrong.
 
-    An elbow does not close flat. Those frames are the pose estimate coming
-    apart, and scoring one would report a tracking artefact as the best rep of
-    the set -- the same shape as the push-up's body-line ceiling.
+    It rejected the top of the pull on sequence 1172, which reads 8 degrees, and
+    with the effort frame gone the flexion gate saw a straight arm and discarded
+    the whole repetition. Three of 25 clips scored nothing because of it.
+
+    Penn Action ground truth settled it: over 2709 measurements the 0-30 band has
+    a median signed error of -2.1 degrees and is the most accurate of the six,
+    and ground truth holds 206 readings in it. These are projected 2D angles, and
+    a front-on pull-up overlaps the upper arm with the forearm at the top.
     """
-    assert not pullup.frame_valid({"elbow_left": elbow, "trunk": 5.0}, "left")
+    assert pullup.frame_valid({"elbow_left": elbow, "trunk": 5.0}, "left")
 
 
-def test_a_deep_but_possible_pull_is_still_scored():
-    """17 degrees was the deepest reading that looked like a real person."""
-    assert pullup.frame_valid({"elbow_left": 17.0, "trunk": 5.0}, "left")
+def test_a_degenerate_zero_is_still_rejected():
+    """All the floor is for now: coincident landmarks, not a hard pull."""
+    assert not pullup.frame_valid({"elbow_left": 0.0, "trunk": 5.0}, "left")
 
 
 def test_a_trunk_past_anything_a_hanging_body_does_is_not_scored():
@@ -147,3 +152,31 @@ def test_scale_is_the_torso_so_tucked_legs_do_not_change_it():
     pairs = set(pullup.PULLUP.scale_pairs)
     assert pairs == {("left_shoulder", "left_hip"), ("right_shoulder", "right_hip")}
     assert all("ankle" not in a and "ankle" not in b for a, b in pullup.PULLUP.scale_pairs)
+
+
+def test_the_overlay_asserts_no_fault_while_no_cue_is_calibrated():
+    """Silence is the deliberate choice here, so it is pinned.
+
+    A red joint is a diagnosis. Step 2 established that Penn Action has no
+    labelled incomplete repetitions, so there is no threshold behind a height
+    claim, so the overlay makes none. If a cue gets calibrated this test should
+    fail and be rewritten -- that is the point of it.
+    """
+    angles = [{"elbow_left": 170.0, "trunk": 2.0},
+              {"elbow_left": 120.0, "trunk": 2.0},   # a rep that came up short
+              {"elbow_left": 165.0, "trunk": 2.0}]
+    flags = pullup.flag_frames(angles, [(0, 1, 2)], "left")
+
+    assert len(flags) == len(angles)
+    assert all(f == set() for f in flags), \
+        "the overlay claimed a fault with no calibrated threshold behind it"
+
+
+def test_the_score_orders_reps_even_though_it_cannot_judge_them():
+    """The split step 2 turned on: ordering needs monotonicity, a cue needs a
+    defensible boundary. Only the first is available."""
+    poor, _ = pullup._score_frame({"elbow_left": 95.0}, "left")
+    mid, _ = pullup._score_frame({"elbow_left": 60.0}, "left")
+    good, _ = pullup._score_frame({"elbow_left": 20.0}, "left")
+
+    assert poor > mid > good
