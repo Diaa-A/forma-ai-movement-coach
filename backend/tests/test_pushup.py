@@ -331,3 +331,21 @@ def test_a_rep_with_a_few_bad_frames_survives():
     kept = mechanics.keep_real_reps(PUSHUP, [(0, 25, 49)], travel_y=None, scale=1.0,
                                     angles_per_frame=angles, side="left", fps=30.0)
     assert len(kept) == 1
+
+
+def test_parked_cues_are_declared_and_not_claimed_as_covered():
+    """The coverage contract, held for the push-up the way the squat and the
+    pull-up already hold it. The audit that found the pull-up's gaps also found
+    this exercise had no test pinning it -- it passed, but only because nobody
+    had broken it yet."""
+    from backend.exercises.base import SAGITTAL, FRONTAL
+    from backend.exercises.pushup_cues import PUSHUP_CUES
+    covered = " ".join(PUSHUP_PROFILE.assessments(SAGITTAL)
+                       + PUSHUP_PROFILE.assessments(FRONTAL)).lower()
+    declared = " ".join(PUSHUP_PROFILE.not_yet_assessed).lower()
+    keywords = {"elbow_flare": "elbow flare", "head_dropped": "head and neck"}
+    for flag, cue in PUSHUP_CUES.items():
+        if not cue.get("available", True):
+            assert keywords[flag] in declared, f"{flag} is parked and undeclared"
+            assert keywords[flag] not in covered, \
+                f"{flag} is parked but claimed as covered"
