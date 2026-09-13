@@ -8,6 +8,7 @@ there is no analysis for it to be checked against.
 import pytest
 
 from backend.exercises.mechanics import Evaluation
+from backend.exercises.pullup_cues import PULLUP_PROFILE
 from backend.exercises.pushup_cues import PUSHUP_PROFILE
 from backend.exercises.squat_cues import SQUAT_PROFILE
 from backend.pipeline import coaching
@@ -78,7 +79,8 @@ def test_an_llm_failure_still_returns_a_complete_report(monkeypatch):
 
 @pytest.mark.parametrize("profile,expected", [
     (SQUAT_PROFILE, "squat"),
-    (PUSHUP_PROFILE, "pushup"),
+    (PUSHUP_PROFILE, "push-up"),
+    (PULLUP_PROFILE, "pull-up"),
 ])
 def test_the_failure_report_names_the_exercise_that_was_uploaded(profile, expected):
     """This said "I couldn't detect a complete squat rep" whatever had been sent.
@@ -116,3 +118,16 @@ def test_the_failure_report_works_without_a_profile():
     report = coaching.not_analyzed_report("no_reps")
     assert "squat" not in report.primary_issue
     assert report.corrective_cues
+
+
+@pytest.mark.parametrize("exercise", ["squat", "pushup", "pullup"])
+def test_the_fallback_does_not_call_an_unchecked_set_clean(exercise):
+    """With no cue fired, the dry-run used to say "No major form fault was
+    detected". None of the three exercises checks everything -- the squat skips
+    knee cave, the push-up skips elbow flare, and the pull-up parks four of its
+    five cues -- so it read as a clean bill of health on things never looked
+    at."""
+    report = coaching._dry_run_report(an_evaluation(exercise))
+    assert "no major form fault" not in report.primary_issue.lower()
+    assert "checks for" in report.primary_issue
+    assert "standard you set" not in report.next_session_focus

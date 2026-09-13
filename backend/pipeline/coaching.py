@@ -339,10 +339,16 @@ def _dry_run_report(evaluation: Evaluation) -> CoachingReport:
         "you completed the set"
     ]
     if primary is None:
-        primary_issue = ("No major form fault was detected from this set — keep "
-                         "the focus on consistency and intent.")
+        # Worded around what was checked, not as a verdict on the set. The old
+        # "No major form fault was detected" read as a clean bill of health, and
+        # none of the three exercises checks everything: the squat does not look
+        # at knee cave, the push-up does not look at elbow flare, and the pull-up
+        # ships with four of five cues parked. A user could not tell "checked and
+        # fine" from "never looked at".
+        primary_issue = ("None of the faults this system checks for showed up "
+                         "in this set.")
         corrective_cues: List[str] = []
-        next_focus = "Maintain the standard you set in this session on your next attempt."
+        next_focus = "Film your next set the same way, so the two can be compared."
     else:
         primary_issue = primary.fault[0].upper() + primary.fault[1:]
         corrective_cues = [primary.fix]
@@ -379,7 +385,10 @@ def not_analyzed_report(status: str, profile=None) -> CoachingReport:
     — two copies drift, and the one quoted back to the user stops matching the
     one they read before recording.
     """
-    name = profile.name if profile is not None else "exercise"
+    # The display label, lowercased, so it reads as a word mid-sentence. The
+    # profile id went straight in before, so a failed push-up clip was told we
+    # could not find a complete "pushup" rep.
+    name = profile.label.lower() if profile is not None else "exercise"
     if status == "no_reps":
         primary = (f"I couldn't detect a complete {name} rep in this clip, so "
                    "there's nothing to score yet.")
