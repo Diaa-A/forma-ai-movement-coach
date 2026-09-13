@@ -17,9 +17,9 @@ each design choice is in the report rather than the repository.
 | D — voice transcription (Groq `whisper-large-v3` default, local `openai-whisper` fallback) | done; live |
 | E — FastAPI server with `/analyze` multipart endpoint | done |
 | F — PWA frontend | done; deployed on Railway and installable on iOS |
-| G — push-up / pull-up analysers | push-up done and benchmarked; pull-up not started (WP-08) |
-| H — Penn Action evaluation harness | done, squat and push-up |
-| I — user testing round 1 | open; participants hold the live link, responses arriving |
+| G — push-up / pull-up analysers | done and benchmarked; the pull-up has one live cue and declares the rest as not assessed yet (WP-08) |
+| H — Penn Action evaluation harness | done, squat, push-up and pull-up |
+| I — user testing round 1 | done; six unique form responses on the demo build |
 
 ## Quick start
 
@@ -91,7 +91,7 @@ Returns JSON with URLs to artefacts served from `/results/<job_id>/`.
 PY -m pytest
 ```
 
-230 tests: angle maths vs known geometry, One Euro behaviour, phase detection on
+269 tests: angle maths vs known geometry, One Euro behaviour, phase detection on
 synthetic signals, rep filter, cue gating, the API's rejection branches, and an
 end-to-end smoke test (the tests that need `data/test_videos/` skip themselves on
 a clean checkout, where test videos are gitignored — a skip there is expected,
@@ -268,8 +268,10 @@ Groq-hosted `whisper-large-v3` (Decision 22). This is the offline fallback only.
 │   │   ├── squat.py           form scoring + side selection + worst/best
 │   │   ├── squat_cues.py      Layer 1 — squat cue database + evaluator
 │   │   ├── pushup.py          push-up scoring on the shared Movement
-│   │   └── pushup_cues.py     Layer 1 — push-up cue database + evaluator
-│   └── tests/                 230 pytest tests
+│   │   ├── pushup_cues.py     Layer 1 — push-up cue database + evaluator
+│   │   ├── pullup.py          pull-up scoring, both arms, effort at the top
+│   │   └── pullup_cues.py     Layer 1 — pull-up cues, four of five parked
+│   └── tests/                 269 pytest tests
 ├── frontend/                  the PWA (React + Vite); built output is served by FastAPI
 │   ├── public/                manifest, service worker, icons
 │   └── src/
@@ -279,7 +281,7 @@ Groq-hosted `whisper-large-v3` (Decision 22). This is the offline fallback only.
 │       ├── screens/           intro → select → consent → guide → capture →
 │       │                      processing → results
 │       └── components/        masthead, stepper, status banner, report view
-├── scripts/                   17 harnesses and figure builders; the ones used most:
+├── scripts/                   18 harnesses and figure builders; the ones used most:
 │   ├── eval_penn_action.py    Phase H benchmark harness
 │   ├── run_faithfulness.py    Layer-2 faithfulness measurement (spends Groq quota)
 │   ├── rescore_faithfulness.py  re-score stored generations offline, no quota
