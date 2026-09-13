@@ -78,8 +78,10 @@ class Movement:
     # The runner negates the travel signal when this is set, which puts the
     # effort point back where the shared machinery expects to find it. Phase
     # labels stay positional as a result: for a pull-up "descent" is the pull and
-    # "ascent" is the lowering, which is the opposite of the other two and is why
-    # the pull-up cue set keys its tempo cue accordingly.
+    # "ascent" is the lowering, the opposite of the other two. Nothing reads that
+    # for the pull-up yet -- it has no tempo cue, and tempo is declared as not
+    # assessed -- but a tempo cue added later has to time "ascent" for the
+    # lowering, or it will time the wrong half of the rep without complaint.
     effort_at_top: bool = False
 
     # --- rep gating, all as multiples of the body scale or degrees of bend ---

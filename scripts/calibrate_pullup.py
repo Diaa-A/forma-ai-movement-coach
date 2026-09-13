@@ -201,7 +201,8 @@ def main():
                  f"(clips with more than one scorable rep: "
                  f"{summary['clips_with_multiple_reps']})")
     lines.append("")
-    hdr = f"{'measure':24s} {'n':>4s} {'min':>7s} {'p25':>7s} {'med':>7s} {'p75':>7s} {'max':>7s}"
+    hdr = (f"{'measure':24s} {'n':>4s} {'min':>7s} {'p25':>7s} "
+           f"{'med':>7s} {'p75':>7s} {'max':>7s}")
     lines.append(hdr)
     lines.append("-" * len(hdr))
     for name in ("elbow_angle_error_deg", "elbow_at_top", "elbow_at_hang",

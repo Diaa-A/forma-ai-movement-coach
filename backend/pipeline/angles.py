@@ -7,7 +7,7 @@ For the squat we expose knee, hip, spine, and ankle angles for both sides — th
 exercise module picks which side to use based on visibility.
 """
 import numpy as np
-from .pose import LM
+from .pose import LM, VISIBILITY_THRESHOLD
 
 
 def joint_angle(a, b, c):
@@ -201,6 +201,53 @@ def pushup_angles_per_frame(landmarks):
     return out
 
 
+# Below this an elbow reading is coincident landmarks rather than a joint. The
+# pull-up's MIN_PLAUSIBLE_ELBOW is this same value and its comment carries the
+# ground-truth numbers; it lives here so the two-arm combination can apply it
+# before choosing an arm instead of after.
+DEGENERATE_ELBOW_DEG = 2.0
+
+
+def _arm_visibility(frame, side):
+    """Lowest visibility across shoulder, elbow and wrist on one side, or -1 if
+    any of the three is missing. An elbow angle is only as trustworthy as the
+    worst-seen point that went into it."""
+    vis = [frame[LM[f"{side}_{j}"]][3] for j in ("shoulder", "elbow", "wrist")]
+    if not all(np.isfinite(v) for v in vis):
+        return -1.0
+    return float(min(vis))
+
+
+def _both_elbows(frame, elbow_l, elbow_r):
+    """The pull-up's working elbow angle: both arms, not a chosen one.
+
+    A pull-up is filmed from the front, the arms are about equally visible, and
+    choosing between them turns into noise. On Penn Action sequence 1173 the arm
+    visibility was 0.813 against 0.771, and that gap alone decided whether the
+    rep gate kept 2 reps or 1.
+
+    An arm counts only if it reads a number above the degenerate floor. Of those,
+    both are averaged when both clear the confidence gate, the confident one is
+    used when only one does, and the better seen otherwise. So a frame that either
+    arm on its own would pass is never lost.
+
+    The first version ranked that last case on visibility alone. Re-measuring
+    1173 showed the problem: on 46 frames neither arm cleared the gate, the right
+    was marginally better seen (0.35 against 0.28) but read 0 degrees, and
+    choosing it threw away a left arm reading 4.
+    """
+    vis_l = _arm_visibility(frame, "left")
+    vis_r = _arm_visibility(frame, "right")
+    usable = [(v, a) for a, v in ((elbow_l, vis_l), (elbow_r, vis_r))
+              if np.isfinite(a) and a >= DEGENERATE_ELBOW_DEG]
+    if not usable:
+        return float("nan")
+    seen = [a for v, a in usable if v >= VISIBILITY_THRESHOLD]
+    if seen:
+        return float(np.mean(seen))
+    return float(max(usable)[1])
+
+
 def pullup_angles_per_frame(landmarks):
     """Per-frame pull-up angle dict.
 
@@ -219,6 +266,9 @@ def pullup_angles_per_frame(landmarks):
                                    body reads near zero; swing and kipping move
                                    it, which is the only handle on either that a
                                    single frame gives
+
+    `elbow` is both arms combined, and it is what the pull-up actually scores
+    on -- see _both_elbows for why no side gets chosen.
 
     No body-line key on purpose. The push-up's shoulder-hip-ankle measure asks
     whether the body held a plank, and a pull-up with the knees tucked -- which is
@@ -246,6 +296,7 @@ def pullup_angles_per_frame(landmarks):
 
         out.append({
             "elbow_left":    elbow_l, "elbow_right":    elbow_r,
+            "elbow":         _both_elbows(fr, elbow_l, elbow_r),
             "shoulder_left": sh_l,    "shoulder_right": sh_r,
             "trunk":         trunk,
         })

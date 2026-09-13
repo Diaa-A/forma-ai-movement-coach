@@ -23,9 +23,9 @@ def _set(tops):
     angles, reps = [], []
     for n, top in enumerate(tops):
         base = n * 3
-        angles += [{"elbow_left": 170.0, "trunk": 2.0},
-                   {"elbow_left": top, "trunk": 2.0},
-                   {"elbow_left": 170.0, "trunk": 2.0}]
+        angles += [{"elbow": 170.0, "trunk": 2.0},
+                   {"elbow": top, "trunk": 2.0},
+                   {"elbow": 170.0, "trunk": 2.0}]
         reps.append((base, base + 1, base + 2))
     return angles, reps
 
@@ -85,8 +85,8 @@ def test_parked_cues_are_declared_rather_than_silently_dropped():
     """§15's rule. Every parked detector has to be named in not_yet_assessed, or
     the user has no way to tell it was never looked at."""
     declared = " ".join(PULLUP_PROFILE.not_yet_assessed).lower()
-    keywords = {"partial_range": "how high you pull",
-                "incomplete_extension": "fully straighten",
+    keywords = {"partial_range": "chin clears the bar",
+                "incomplete_extension": "straighten fully",
                 "kipping": "kipping",
                 "grip_too_wide": "grip width"}
     for flag, cue in PULLUP_CUES.items():
@@ -116,7 +116,8 @@ def test_the_report_says_what_was_not_assessed():
     angles, reps = _set([30.0, 32.0])
     ev = evaluate_pullup(angles, reps, "left", 30.0)
 
-    assert ev.view_guidance, "a pull-up report with no coverage line hides four parked cues"
+    assert ev.view_guidance, \
+        "a pull-up report with no coverage line hides four parked cues"
     assert "not assessed yet" in ev.view_guidance.lower()
     assert any(ev.view_guidance == n for n in ev.notes)
 
@@ -132,8 +133,26 @@ def test_no_reps_means_no_coverage_claim_either():
 def test_an_invalid_top_frame_is_not_counted_as_a_rep_height():
     """A degenerate elbow reading must not become a rep's measured height, or the
     spread is computed against a landmark error."""
-    angles = [{"elbow_left": 170.0, "trunk": 2.0},
-              {"elbow_left": 0.0, "trunk": 2.0},      # degenerate
-              {"elbow_left": 170.0, "trunk": 2.0}]
+    angles = [{"elbow": 170.0, "trunk": 2.0},
+              {"elbow": 0.0, "trunk": 2.0},      # degenerate
+              {"elbow": 170.0, "trunk": 2.0}]
     ev = evaluate_pullup(angles, [(0, 1, 2)], "left", 30.0)
     assert not any("spread" in n for n in ev.notes)
+
+
+def test_the_not_assessed_line_reads_as_a_list():
+    """coverage_guidance joins items with commas and a final "and", so an item
+    carrying either of its own makes the sentence ambiguous. The first version
+    rendered "body swing and kipping and grip width"."""
+    for item in PULLUP_PROFILE.not_yet_assessed:
+        assert "," not in item, item
+        assert " and " not in item, item
+
+
+def test_tempo_and_arm_evenness_are_declared():
+    """The audit found both in the state that must not exist -- declared nowhere.
+    Squat and push-up both time the lowering, so a pull-up user will ask, and
+    front-on is the one view that shows both arms at once."""
+    declared = " ".join(PULLUP_PROFILE.not_yet_assessed).lower()
+    assert "how fast you lower" in declared
+    assert "evenly" in declared

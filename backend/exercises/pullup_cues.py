@@ -8,10 +8,11 @@ detector is not trustworthy carrying `available: False`.
 rather than an oversight.** WP-08 step 2 measured all 25 Penn Action sequences
 and found the pipeline reads a pull-up well — 5.5 degrees of elbow error in the
 deep-flexion band these cues would read, against 9.1 overall — but Penn Action
-labels what an action is, not whether it was done well. There is no incomplete repetition in the
-set to calibrate a boundary against, and across 26 repetitions the elbow at the
-top ran 2.8 to 73.8 degrees in one unbroken spread. A threshold placed in that
-range would separate a population from itself.
+labels what an action is, not whether it was done well. There is no incomplete
+repetition in the set to calibrate a boundary against, and across 26
+repetitions the elbow at the top ran 2.6 to 86.3 degrees in one unbroken
+spread. A threshold placed in that range would separate a population from
+itself.
 
 The one cue that does fire needs no such boundary, which is why it survived. It
 compares a repetition against the others in the same set, so the person is their
@@ -32,7 +33,7 @@ import numpy as np
 
 from .base import ExerciseProfile, FRONTAL, SAGITTAL, coverage_guidance
 from .mechanics import CueHit, Evaluation
-from .pullup import _elbow_key, frame_valid
+from .pullup import frame_valid
 from . import pullup
 
 
@@ -61,7 +62,7 @@ PULLUP_CUES = {
         # Parked, and the reason is not the usual one. This is measurable: elbow
         # error at deep flexion is 5.5 degrees, the best band of the six. What is
         # missing is any labelled partial repetition to set the boundary from.
-        # Across 26 scored reps the elbow at the top ran 2.8 to 73.8 with no
+        # Across 26 scored reps the elbow at the top ran 2.6 to 86.3 with no
         # division anywhere in it, so a threshold would be invented rather than
         # calibrated. Unparks when clips with known partial reps exist.
         "available": False,
@@ -76,7 +77,7 @@ PULLUP_CUES = {
         "phase": "bottom",
         "plane": FRONTAL,
         # Same reason as partial_range. Elbow at the hang is well measured — 6.2
-        # degrees of error, median 173.9 across the set — and nothing in the set
+        # degrees of error, median 174.0 across the set — and nothing in the set
         # is marked as a partial hang to calibrate against.
         "available": False,
     },
@@ -136,18 +137,28 @@ PULLUP_PROFILE = ExerciseProfile(
         # parked. Listing it would read as coverage.
         SAGITTAL: [],
     },
-    not_yet_assessed=["how high you pull, and whether the chin clears the bar",
-                      "whether the arms fully straighten between reps",
-                      "body swing and kipping",
-                      "grip width"],
+    # No item carries a comma or an "and" of its own. coverage_guidance joins
+    # them with both, and the old wording rendered as "... body swing and kipping
+    # and grip width" -- three things or two, depending on where you breathe.
+    # Tempo and left/right evenness were declared nowhere until the audit turned
+    # them up, and both squat and push-up time the lowering, so a pull-up user
+    # is going to ask.
+    not_yet_assessed=["whether your chin clears the bar",
+                      "whether your arms straighten fully between reps",
+                      "body swing or kipping",
+                      "grip width",
+                      "how evenly your two arms pull",
+                      "how fast you lower"],
 )
 
 
 # Spread of the top-of-rep elbow angle across a set, past which the reps really
 # did differ. Set from the instrument rather than from labelled form, which is
-# what makes it defensible when the other thresholds were not: elbow error is
-# 5.5 to 6.7 degrees over the angles this reads, so a spread of 20 is roughly
-# three times the noise and cannot be the measurement wobbling.
+# what makes it defensible when the other thresholds were not: elbow error per
+# arm is 5.5 to 6.7 degrees over the angles this reads, so a spread of 20 is
+# roughly three times the noise and cannot be the measurement wobbling. The cue
+# now reads both arms averaged, and that average has not been benchmarked on its
+# own, so the per-arm figure is the one this leans on.
 #
 # It matches the push-up's depth-inconsistency figure, which is a coincidence of
 # the same reasoning rather than a value copied across.
@@ -173,8 +184,8 @@ def evaluate_pullup(angles_per_frame, reps, side, fps, phase_per_frame=None,
     """Fire the cue database against one analysed set.
 
     Shorter than its two siblings because four of the five cues are parked. What
-    is left reads the elbow at the top of each rep and asks whether the reps
-    agreed with each other.
+    is left reads the elbow at the top of each rep -- both arms averaged, not a
+    chosen side -- and asks whether the reps agreed with each other.
 
     `phase_per_frame` and `landmarks` are accepted and unused. Every cue that
     would need them is parked, and the signature is shared with the other two
@@ -184,7 +195,7 @@ def evaluate_pullup(angles_per_frame, reps, side, fps, phase_per_frame=None,
     notes: List[str] = []
     positives: List[str] = []
 
-    key = _elbow_key(side)
+    key = pullup.PULLUP.primary_angle(side)
     tops = []
 
     for (s, b, e) in reps:
@@ -193,7 +204,8 @@ def evaluate_pullup(angles_per_frame, reps, side, fps, phase_per_frame=None,
         if f is None:
             continue
         angle = angles_per_frame[f].get(key)
-        if angle is not None and np.isfinite(angle) and frame_valid(angles_per_frame[f], side):
+        if (angle is not None and np.isfinite(angle)
+                and frame_valid(angles_per_frame[f], side)):
             tops.append(float(angle))
 
     spread = max(tops) - min(tops) if len(tops) >= 2 else None
@@ -218,9 +230,14 @@ def evaluate_pullup(angles_per_frame, reps, side, fps, phase_per_frame=None,
     if view_guidance:
         notes.append(view_guidance)
 
+    # "both", not the side the runner picked. This goes to Layer 2 as
+    # side_analysed, and the elbow it describes is both arms averaged, so
+    # passing "left" would invite "your left arm did not come up as high" --
+    # something nothing measured. The results screen's side chip is read from
+    # the runner's pick rather than from here, so that still names one arm.
     return Evaluation(
         exercise="pullup",
-        side=side,
+        side="both",
         rep_count=len(reps),
         cues_fired=list(fired.values()),
         positives=positives,

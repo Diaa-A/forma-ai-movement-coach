@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from ..pipeline.angles import DEGENERATE_ELBOW_DEG
 from ..pipeline.pose import LM, VISIBILITY_THRESHOLD
 from . import mechanics
 from .mechanics import Movement
@@ -52,9 +53,9 @@ from .mechanics import Movement
 # here; the second is not.
 #
 # 40 is the 75th percentile of what the calibration set actually reached at the
-# top (n=26: min 2.8, p25 11.1, median 25.4, p75 38.1, max 73.8). Most reps
-# therefore score zero and the ones that came up short of the field sort to the
-# end, which is all the ordering needs.
+# top on the two-arm elbow: n=26, min 2.6, p25 13.6, median 24.7, p75 39.8, max
+# 86.3. Most reps therefore score zero and the ones that came up short of the
+# field sort to the end, which is all the ordering needs.
 ELBOW_TARGET_TOP = 40.0
 
 # Deliberately absent: a height-flag threshold and a hang-extension threshold.
@@ -64,8 +65,9 @@ ELBOW_TARGET_TOP = 40.0
 # an extension cue would read. Overall the pull-up's elbow median is 9.1 deg,
 # against the push-up's 8.1, so the two exercises are measured about as well as
 # each other and the bands that matter here happen to be the accurate ones. What
-# is missing is any labelled example of the fault. Penn Action says an action is a pull-up; it does not say whether it
-# was a good one. Across 26 scored reps the elbow at the top ran 2.8 to 73.8 with
+# is missing is any labelled example of the fault.
+# Penn Action says an action is a pull-up; it does not say whether it
+# was a good one. Across 26 scored reps the elbow at the top ran 2.6 to 86.3 with
 # no marked boundary anywhere in it, and a number chosen from that range would
 # separate a population from itself.
 #
@@ -96,7 +98,7 @@ ELBOW_TARGET_TOP = 40.0
 # angles: at the top of a pull-up filmed from the front the upper arm and the
 # forearm overlap in projection, so a small angle there is a correct measurement
 # of what the camera can see rather than a failure to track.
-MIN_PLAUSIBLE_ELBOW = 2.0
+MIN_PLAUSIBLE_ELBOW = DEGENERATE_ELBOW_DEG
 
 # Torso lean from vertical. A hanging body reads near zero; swing moves it. Only
 # a proxy for kipping and not calibrated -- `pullup_cues.py` parks the kipping cue
@@ -124,25 +126,32 @@ MIN_REP_ELBOW_FLEXION = 30.0
 MIN_REP_FLEXION_RATIO = 0.4
 
 
-def _elbow_key(side):
-    return "elbow_left" if side == "left" else "elbow_right"
+# The key every scoring function here reads: both arms, averaged where both are
+# tracked (see _both_elbows in angles.py). The side argument these functions
+# still take is kept for the shared signature and deliberately changes nothing.
+# Under a front-on camera the two arms are about equally visible, and on
+# sequence 1173 a four-point visibility gap between them was the difference
+# between telling the user they did 2 reps and telling them they did 1.
+ELBOW_KEY = "elbow"
 
 
 def frame_valid(angle_dict, side):
     """Is this frame usable for scoring?
 
-    Two ways a pull-up frame goes wrong. The elbow can come back impossibly
-    closed, which is a landmark scramble. Or the trunk can swing past anything a
+    Two ways a pull-up frame goes wrong. The elbow can come back degenerate,
+    which is coincident landmarks rather than a hard pull -- MIN_PLAUSIBLE_ELBOW
+    explains why that floor sits so low. Or the trunk can swing past anything a
     hanging body does, which is the tracker having lost the torso rather than a
     violent kip.
     """
-    elbow = angle_dict.get(_elbow_key(side))
+    elbow = angle_dict.get(ELBOW_KEY)
     if elbow is None or not np.isfinite(elbow):
         return False
     if elbow < MIN_PLAUSIBLE_ELBOW:
         return False
     trunk = angle_dict.get("trunk")
-    if trunk is not None and np.isfinite(trunk) and abs(trunk) > MAX_PLAUSIBLE_TRUNK_LEAN:
+    if (trunk is not None and np.isfinite(trunk)
+            and abs(trunk) > MAX_PLAUSIBLE_TRUNK_LEAN):
         return False
     return True
 
@@ -154,7 +163,7 @@ def _score_frame(angle_dict, side):
     nothing else -- no cue reads it. Pulling higher than the reference is not a
     fault, so the penalty is one-sided, the same way the push-up treats depth.
     """
-    elbow = angle_dict.get(_elbow_key(side))
+    elbow = angle_dict.get(ELBOW_KEY)
     if elbow is None or not np.isfinite(elbow):
         return float("-inf"), {"height": None}
 
@@ -184,7 +193,7 @@ def flag_frames(angles_per_frame, reps, side, top_window=8):
 
 PULLUP = Movement(
     name="pullup",
-    primary_angle=_elbow_key,
+    primary_angle=lambda side: ELBOW_KEY,
     side_joints=lambda side: [f"{side}_shoulder", f"{side}_elbow", f"{side}_wrist"],
     # torso only, for the reason in the rep-gating note above
     scale_pairs=[("left_shoulder", "left_hip"), ("right_shoulder", "right_hip")],

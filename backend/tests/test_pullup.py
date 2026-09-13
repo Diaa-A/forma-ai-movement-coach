@@ -12,6 +12,7 @@ import numpy as np
 import pytest
 
 from backend.exercises import mechanics, pullup, pushup, squat
+from backend.pipeline.angles import pullup_angles_per_frame
 from backend.pipeline.phase_detection import detect_bottoms
 
 
@@ -96,17 +97,17 @@ def test_a_deeply_folded_elbow_is_a_measurement_not_a_glitch(elbow):
     and ground truth holds 206 readings in it. These are projected 2D angles, and
     a front-on pull-up overlaps the upper arm with the forearm at the top.
     """
-    assert pullup.frame_valid({"elbow_left": elbow, "trunk": 5.0}, "left")
+    assert pullup.frame_valid({"elbow": elbow, "trunk": 5.0}, "left")
 
 
 def test_a_degenerate_zero_is_still_rejected():
     """All the floor is for now: coincident landmarks, not a hard pull."""
-    assert not pullup.frame_valid({"elbow_left": 0.0, "trunk": 5.0}, "left")
+    assert not pullup.frame_valid({"elbow": 0.0, "trunk": 5.0}, "left")
 
 
 def test_a_trunk_past_anything_a_hanging_body_does_is_not_scored():
-    assert not pullup.frame_valid({"elbow_left": 90.0, "trunk": 75.0}, "left")
-    assert pullup.frame_valid({"elbow_left": 90.0, "trunk": 20.0}, "left")
+    assert not pullup.frame_valid({"elbow": 90.0, "trunk": 75.0}, "left")
+    assert pullup.frame_valid({"elbow": 90.0, "trunk": 20.0}, "left")
 
 
 def test_travel_ceiling_admits_a_rep_that_moves_a_whole_torso_length():
@@ -123,8 +124,8 @@ def test_travel_ceiling_admits_a_rep_that_moves_a_whole_torso_length():
     scale = 0.25
     travel = np.array([0.0, 0.30])          # 1.2x scale, a normal rep
     reps = [(0, 1, 1)]
-    angles = [{"elbow_left": 170.0, "trunk": 2.0},
-              {"elbow_left": 40.0, "trunk": 2.0}]
+    angles = [{"elbow": 170.0, "trunk": 2.0},
+              {"elbow": 40.0, "trunk": 2.0}]
     kept = pullup.keep_real_reps(reps, travel, scale,
                                  angles_per_frame=angles, side="left")
     assert kept == reps, "a rep moving 1.2 torso lengths should survive the gate"
@@ -137,9 +138,9 @@ def test_pulling_higher_than_the_target_is_not_a_fault():
     two-sided penalty would score them worse than someone who stopped at the
     target.
     """
-    at_target, _ = pullup._score_frame({"elbow_left": pullup.ELBOW_TARGET_TOP}, "left")
-    higher, _ = pullup._score_frame({"elbow_left": 25.0}, "left")
-    short, _ = pullup._score_frame({"elbow_left": 110.0}, "left")
+    at_target, _ = pullup._score_frame({"elbow": pullup.ELBOW_TARGET_TOP}, "left")
+    higher, _ = pullup._score_frame({"elbow": 25.0}, "left")
+    short, _ = pullup._score_frame({"elbow": 110.0}, "left")
 
     assert at_target == 0.0
     assert higher == 0.0
@@ -151,7 +152,8 @@ def test_scale_is_the_torso_so_tucked_legs_do_not_change_it():
     an amount that has nothing to do with how big they are."""
     pairs = set(pullup.PULLUP.scale_pairs)
     assert pairs == {("left_shoulder", "left_hip"), ("right_shoulder", "right_hip")}
-    assert all("ankle" not in a and "ankle" not in b for a, b in pullup.PULLUP.scale_pairs)
+    assert all("ankle" not in a and "ankle" not in b
+               for a, b in pullup.PULLUP.scale_pairs)
 
 
 def test_the_overlay_asserts_no_fault_while_no_cue_is_calibrated():
@@ -162,9 +164,9 @@ def test_the_overlay_asserts_no_fault_while_no_cue_is_calibrated():
     claim, so the overlay makes none. If a cue gets calibrated this test should
     fail and be rewritten -- that is the point of it.
     """
-    angles = [{"elbow_left": 170.0, "trunk": 2.0},
-              {"elbow_left": 120.0, "trunk": 2.0},   # a rep that came up short
-              {"elbow_left": 165.0, "trunk": 2.0}]
+    angles = [{"elbow": 170.0, "trunk": 2.0},
+              {"elbow": 120.0, "trunk": 2.0},   # a rep that came up short
+              {"elbow": 165.0, "trunk": 2.0}]
     flags = pullup.flag_frames(angles, [(0, 1, 2)], "left")
 
     assert len(flags) == len(angles)
@@ -175,8 +177,94 @@ def test_the_overlay_asserts_no_fault_while_no_cue_is_calibrated():
 def test_the_score_orders_reps_even_though_it_cannot_judge_them():
     """The split step 2 turned on: ordering needs monotonicity, a cue needs a
     defensible boundary. Only the first is available."""
-    poor, _ = pullup._score_frame({"elbow_left": 95.0}, "left")
-    mid, _ = pullup._score_frame({"elbow_left": 60.0}, "left")
-    good, _ = pullup._score_frame({"elbow_left": 20.0}, "left")
+    poor, _ = pullup._score_frame({"elbow": 95.0}, "left")
+    mid, _ = pullup._score_frame({"elbow": 60.0}, "left")
+    good, _ = pullup._score_frame({"elbow": 20.0}, "left")
 
     assert poor > mid > good
+
+
+def _arms(left_deg, right_deg, left_vis, right_vis):
+    """One frame of landmarks with each elbow bent to a known angle.
+
+    Shoulder straight above the elbow and the wrist swung out by the angle, so
+    joint_angle gives back exactly what was asked for. Visibility is set per arm
+    on all three points of its triplet.
+    """
+    from backend.pipeline.pose import LM
+    fr = np.zeros((33, 4))
+    fr[:, 3] = 0.9
+    for side, deg, vis, x in (("left", left_deg, left_vis, 0.4),
+                              ("right", right_deg, right_vis, 0.6)):
+        t = np.radians(deg)
+        fr[LM[f"{side}_shoulder"]] = [x, 0.3, 0.0, vis]
+        fr[LM[f"{side}_elbow"]] = [x, 0.5, 0.0, vis]
+        fr[LM[f"{side}_wrist"]] = [x + 0.2 * np.sin(t),
+                                   0.5 - 0.2 * np.cos(t), 0.0, vis]
+        fr[LM[f"{side}_hip"]] = [x, 0.8, 0.0, 0.9]
+    return np.array([fr])
+
+
+def test_both_arms_tracked_means_both_arms_count():
+    elbow = pullup_angles_per_frame(_arms(30.0, 40.0, 0.9, 0.9))[0]["elbow"]
+    assert elbow == pytest.approx(35.0, abs=0.5)
+
+
+def test_an_arm_below_the_confidence_gate_is_left_out():
+    """MediaPipe still returns landmarks for an arm it cannot see -- it guesses
+    them -- so the angle is a number, just not one to average in."""
+    elbow = pullup_angles_per_frame(_arms(30.0, 150.0, 0.9, 0.3))[0]["elbow"]
+    assert elbow == pytest.approx(30.0, abs=0.5)
+
+
+def test_with_neither_arm_confident_the_better_seen_one_is_used():
+    """Both arms below the gate but both reading a real angle: the better seen
+    stands in. A degenerate reading is not a candidate at all -- see below."""
+    elbow = pullup_angles_per_frame(_arms(30.0, 90.0, 0.5, 0.4))[0]["elbow"]
+    assert elbow == pytest.approx(30.0, abs=0.5)
+
+
+def test_which_side_was_picked_no_longer_changes_the_rep_count():
+    """Sequence 1173: arm visibility 0.813 left and 0.771 right, and the gate
+    kept 2 reps reading the left elbow but 1 reading the right. Rep count is the
+    first thing the pull-up claims to measure, so the side argument is pinned as
+    making no difference."""
+    scale = 0.25
+    travel = np.array([0.0, 0.30, 0.0, 0.30, 0.0])
+    reps = [(0, 1, 2), (2, 3, 4)]
+    angles = [{"elbow": 170.0, "trunk": 2.0},
+              {"elbow": 40.0, "trunk": 2.0},
+              {"elbow": 170.0, "trunk": 2.0},
+              {"elbow": 45.0, "trunk": 2.0},
+              {"elbow": 170.0, "trunk": 2.0}]
+    left = pullup.keep_real_reps(reps, travel, scale,
+                                 angles_per_frame=angles, side="left")
+    right = pullup.keep_real_reps(reps, travel, scale,
+                                  angles_per_frame=angles, side="right")
+    assert left == right == reps
+    assert (pullup.frame_valid(angles[1], "left")
+            == pullup.frame_valid(angles[1], "right"))
+
+
+def test_a_degenerate_arm_never_wins_on_visibility_alone():
+    """Found by re-measuring 1173 after the two-arm change. On 46 frames neither
+    arm cleared the gate, the right was marginally better seen (0.35 against
+    0.28) but read 0 degrees, and ranking on visibility alone threw away a left
+    arm reading 4 -- 46 frames lost, none gained."""
+    elbow = pullup_angles_per_frame(_arms(4.0, 0.0, 0.28, 0.35))[0]["elbow"]
+    assert elbow == pytest.approx(4.0, abs=0.5)
+
+
+def test_a_confident_but_degenerate_arm_is_not_averaged_in():
+    """The worse half of the same hole, and the probe never hit it: a hang at 170
+    averaged with a degenerate 0 is a plausible-looking 85 that passes every gate
+    and is wrong."""
+    elbow = pullup_angles_per_frame(_arms(170.0, 0.0, 0.9, 0.9))[0]["elbow"]
+    assert elbow == pytest.approx(170.0, abs=0.5)
+
+
+def test_the_combination_and_the_scoring_gate_share_one_floor():
+    """If these drift apart the combination can hand the gate a reading the gate
+    then rejects, which is exactly how the 46 frames went."""
+    from backend.pipeline.angles import DEGENERATE_ELBOW_DEG
+    assert pullup.MIN_PLAUSIBLE_ELBOW == DEGENERATE_ELBOW_DEG
