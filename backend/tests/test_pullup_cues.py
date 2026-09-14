@@ -1,13 +1,9 @@
 """Layer 1 for the pull-up.
 
-Four of the five cues are parked, so most of what is worth testing here is that
-they stay parked and that the profile says so out loud. The coverage contract is
-the whole point of the exercise: a user must be able to tell "checked and fine"
-from "not looked at", and with this many parked detectors the second case is the
-common one.
+Four of the five cues are parked, so most of this checks that they stay parked
+and that the profile declares them: a user has to be able to tell "checked" from
+"not looked at".
 """
-import numpy as np
-
 from backend.exercises.base import FRONTAL, SAGITTAL
 from backend.exercises.pullup_cues import (PULLUP_CUES, PULLUP_PROFILE,
                                            _RANGE_INCONSISTENCY_DEG,
@@ -40,8 +36,8 @@ def test_reps_that_agree_are_reported_as_consistent():
 
 
 def test_reps_that_differ_by_more_than_the_instrument_fire_the_cue():
-    """The threshold is three times the measured elbow error, so a spread this
-    wide is the person changing rather than the measurement wobbling."""
+    """20 degrees is about three times the elbow error, so a spread this wide is
+    the reps differing, not noise."""
     angles, reps = _set([25.0, 30.0, 70.0])
     ev = evaluate_pullup(angles, reps, "left", 30.0)
 
@@ -51,15 +47,14 @@ def test_reps_that_differ_by_more_than_the_instrument_fire_the_cue():
 
 
 def test_a_spread_just_under_the_tolerance_says_nothing():
-    """Pins the boundary. Just inside is silence, not a quiet fault."""
+    """Pins the boundary: just inside the tolerance says nothing."""
     angles, reps = _set([30.0, 30.0 + _RANGE_INCONSISTENCY_DEG - 1.0])
     ev = evaluate_pullup(angles, reps, "left", 30.0)
     assert not ev.cues_fired
 
 
 def test_a_single_rep_is_not_judged_for_consistency():
-    """There is nothing to be consistent with. Firing here would be asserting a
-    fault from one observation."""
+    """One rep has nothing to be consistent with."""
     angles, reps = _set([65.0])
     ev = evaluate_pullup(angles, reps, "left", 30.0)
 
@@ -69,8 +64,7 @@ def test_a_single_rep_is_not_judged_for_consistency():
 
 
 def test_the_parked_cues_never_fire():
-    """They have no calibrated threshold behind them. _fire refuses them, and
-    that refusal is what keeps an uncalibrated claim off the user's screen."""
+    """No calibrated threshold behind them, so _fire refuses them."""
     parked = [f for f, c in PULLUP_CUES.items() if not c.get("available", False)]
     assert set(parked) == {"partial_range", "incomplete_extension", "kipping",
                            "grip_too_wide"}
@@ -82,8 +76,8 @@ def test_the_parked_cues_never_fire():
 
 
 def test_parked_cues_are_declared_rather_than_silently_dropped():
-    """§15's rule. Every parked detector has to be named in not_yet_assessed, or
-    the user has no way to tell it was never looked at."""
+    """Every parked cue has to be named in not_yet_assessed, or the user cannot
+    tell it was never looked at."""
     declared = " ".join(PULLUP_PROFILE.not_yet_assessed).lower()
     keywords = {"partial_range": "chin clears the bar",
                 "incomplete_extension": "straighten fully",
@@ -95,8 +89,8 @@ def test_parked_cues_are_declared_rather_than_silently_dropped():
 
 
 def test_the_profile_claims_no_sagittal_coverage():
-    """Body swing is the only sagittal thing a pull-up has and it is parked, so
-    listing anything here would read as a clean bill of health on it."""
+    """Body swing is the only sagittal assessment and it is parked, so nothing is
+    listed there."""
     assert PULLUP_PROFILE.assessments(SAGITTAL) == []
     assert PULLUP_PROFILE.assessments(FRONTAL)
     assert PULLUP_PROFILE.view_label == "front-on"
@@ -130,14 +124,21 @@ def test_no_reps_means_no_coverage_claim_either():
     assert ev.view_guidance is None
 
 
-def test_an_invalid_top_frame_is_not_counted_as_a_rep_height():
-    """A degenerate elbow reading must not become a rep's measured height, or the
-    spread is computed against a landmark error."""
+def test_a_degenerate_reading_is_not_used_as_a_rep_height():
+    """The second rep's lowest reading is degenerate. Its height has to come from
+    the 36-degree frame beside it: counting the 0 would put the spread at 30 and
+    fire the cue."""
     angles = [{"elbow": 170.0, "trunk": 2.0},
+              {"elbow": 30.0, "trunk": 2.0},
+              {"elbow": 170.0, "trunk": 2.0},
+              {"elbow": 170.0, "trunk": 2.0},
               {"elbow": 0.0, "trunk": 2.0},      # degenerate
+              {"elbow": 36.0, "trunk": 2.0},
               {"elbow": 170.0, "trunk": 2.0}]
-    ev = evaluate_pullup(angles, [(0, 1, 2)], "left", 30.0)
-    assert not any("spread" in n for n in ev.notes)
+    ev = evaluate_pullup(angles, [(0, 1, 2), (3, 4, 6)], "left", 30.0)
+
+    assert not ev.cues_fired
+    assert any("33°" in n for n in ev.notes)
 
 
 def test_the_not_assessed_line_reads_as_a_list():
@@ -150,9 +151,8 @@ def test_the_not_assessed_line_reads_as_a_list():
 
 
 def test_tempo_and_arm_evenness_are_declared():
-    """The audit found both in the state that must not exist -- declared nowhere.
-    Squat and push-up both time the lowering, so a pull-up user will ask, and
-    front-on is the one view that shows both arms at once."""
+    """Squat and push-up both time the lowering, so a pull-up user will ask about
+    tempo, and front-on is the view that shows both arms at once."""
     declared = " ".join(PULLUP_PROFILE.not_yet_assessed).lower()
     assert "how fast you lower" in declared
     assert "evenly" in declared

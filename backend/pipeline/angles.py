@@ -202,9 +202,8 @@ def pushup_angles_per_frame(landmarks):
 
 
 # Below this an elbow reading is coincident landmarks rather than a joint. The
-# pull-up's MIN_PLAUSIBLE_ELBOW is this same value and its comment carries the
-# ground-truth numbers; it lives here so the two-arm combination can apply it
-# before choosing an arm instead of after.
+# pull-up's validity gate uses the same value, so the two-arm combination never
+# hands over a reading the gate would then reject.
 DEGENERATE_ELBOW_DEG = 2.0
 
 
@@ -219,22 +218,14 @@ def _arm_visibility(frame, side):
 
 
 def _both_elbows(frame, elbow_l, elbow_r):
-    """The pull-up's working elbow angle: both arms, not a chosen one.
+    """The pull-up's elbow angle, from both arms rather than a chosen one.
 
-    A pull-up is filmed from the front, the arms are about equally visible, and
-    choosing between them turns into noise. On Penn Action sequence 1173 the arm
-    visibility was 0.813 against 0.771, and that gap alone decided whether the
-    rep gate kept 2 reps or 1.
-
-    An arm counts only if it reads a number above the degenerate floor. Of those,
-    both are averaged when both clear the confidence gate, the confident one is
-    used when only one does, and the better seen otherwise. So a frame that either
-    arm on its own would pass is never lost.
-
-    The first version ranked that last case on visibility alone. Re-measuring
-    1173 showed the problem: on 46 frames neither arm cleared the gate, the right
-    was marginally better seen (0.35 against 0.28) but read 0 degrees, and
-    choosing it threw away a left arm reading 4.
+    From the front the arms are about equally visible, so picking one is noise.
+    An arm counts if its reading is above the degenerate floor. Of those, both are
+    averaged if both clear the confidence gate, the confident one is used if only
+    one does, and otherwise the better seen. A frame either arm would pass on its
+    own is never lost; ranking on visibility first lost 46 frames on sequence
+    1173, where the better-seen arm read 0.
     """
     vis_l = _arm_visibility(frame, "left")
     vis_r = _arm_visibility(frame, "right")
@@ -249,31 +240,20 @@ def _both_elbows(frame, elbow_l, elbow_r):
 
 
 def pullup_angles_per_frame(landmarks):
-    """Per-frame pull-up angle dict.
+    """Per-frame pull-up angle dict. Keys:
 
-    Same primitives again, and a shorter list than the push-up's because a
-    hanging body offers less that is worth measuring. Keys:
-
-        elbow_left / elbow_right   shoulder-elbow-wrist, the angle that flexes.
-                                   Unlike the push-up this reaches its MINIMUM at
-                                   the top of the movement, with the chin at the
-                                   bar
+        elbow_left / elbow_right   shoulder-elbow-wrist. Smallest at the top of
+                                   the pull, the opposite of the push-up
+        elbow                      both arms combined, which is what the pull-up
+                                   scores on
         shoulder_left / shoulder_right
                                    elbow-shoulder-hip, how far the upper arm sits
-                                   from the torso. Wide on a wide grip, narrow on
-                                   a chin-up
-        trunk                      torso angle from image vertical. A hanging
-                                   body reads near zero; swing and kipping move
-                                   it, which is the only handle on either that a
-                                   single frame gives
+                                   from the torso
+        trunk                      torso angle from image vertical, near zero for
+                                   a still hanging body
 
-    `elbow` is both arms combined, and it is what the pull-up actually scores
-    on -- see _both_elbows for why no side gets chosen.
-
-    No body-line key on purpose. The push-up's shoulder-hip-ankle measure asks
-    whether the body held a plank, and a pull-up with the knees tucked -- which is
-    how most people hang -- would read as a severe fault while being perfectly
-    correct.
+    No body-line key: a pull-up hung with bent knees would read as a sagging
+    plank.
     """
     out = []
     for f in range(len(landmarks)):

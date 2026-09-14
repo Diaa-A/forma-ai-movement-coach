@@ -334,10 +334,8 @@ def test_a_rep_with_a_few_bad_frames_survives():
 
 
 def test_parked_cues_are_declared_and_not_claimed_as_covered():
-    """The coverage contract, held for the push-up the way the squat and the
-    pull-up already hold it. The audit that found the pull-up's gaps also found
-    this exercise had no test pinning it -- it passed, but only because nobody
-    had broken it yet."""
+    """Holds the coverage contract for the push-up the way the squat and pull-up
+    suites already do."""
     from backend.exercises.base import SAGITTAL, FRONTAL
     from backend.exercises.pushup_cues import PUSHUP_CUES
     covered = " ".join(PUSHUP_PROFILE.assessments(SAGITTAL)

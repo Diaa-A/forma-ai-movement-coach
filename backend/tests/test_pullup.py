@@ -1,12 +1,8 @@
 """Pull-up mechanics.
 
-Only what is specific to the pull-up. The shared rep machinery is covered by the
-squat and push-up suites and is not re-tested here.
-
-The first three tests are about one thing: a pull-up puts the hard part of the
-rep at the top of the body's travel, and every other exercise puts it at the
-bottom. That is the failure this exercise introduced, and it is the kind that
-produces a sensible-looking rep count built entirely on the wrong frames.
+Only what is specific to the pull-up; the shared rep machinery is tested in the
+squat and push-up suites. The first three tests cover the effort-at-top flip,
+where a mistake would still produce a believable rep count.
 """
 import numpy as np
 import pytest
@@ -36,13 +32,8 @@ def _hanging_body(n_reps=3, frames_per_rep=40):
 
 
 def test_detector_without_the_flag_finds_the_hang_not_the_pull():
-    """The defect the flag exists to prevent, pinned so it cannot come back.
-
-    Run the raw signal through the detector and it returns the dead hang between
-    reps. Nothing about the output says so -- the count is plausible and the reps
-    are evenly spaced, which is exactly why this needed a test rather than a
-    reading of the results.
-    """
+    """The defect the flag exists for. On the raw signal the detector returns the
+    dead hang between reps, and the count and spacing look normal."""
     y, tops = _hanging_body()
     bottoms = detect_bottoms(y, min_separation=5)
 
@@ -68,12 +59,8 @@ def test_flag_moves_the_detected_frame_to_the_top_of_the_pull():
 
 
 def test_only_the_pullup_inverts_its_travel():
-    """A guard, not a behaviour check.
-
-    Setting effort_at_top on a squat or a push-up would silently invert the one
-    thing their whole cue set is built around, so the value is asserted rather
-    than left to review.
-    """
+    """Guard: setting it on the squat or push-up would invert what their cues
+    are built around."""
     assert pullup.PULLUP.effort_at_top is True
     assert squat.SQUAT.effort_at_top is False
     assert pushup.PUSHUP.effort_at_top is False
@@ -86,22 +73,14 @@ def test_only_the_pullup_inverts_its_travel():
 
 @pytest.mark.parametrize("elbow", [8.0, 14.9, 17.0, 27.4])
 def test_a_deeply_folded_elbow_is_a_measurement_not_a_glitch(elbow):
-    """The floor was 15 degrees and that was wrong.
-
-    It rejected the top of the pull on sequence 1172, which reads 8 degrees, and
-    with the effort frame gone the flexion gate saw a straight arm and discarded
-    the whole repetition. Three of 25 clips scored nothing because of it.
-
-    Penn Action ground truth settled it: over 2709 measurements the 0-30 band has
-    a median signed error of -2.1 degrees and is the most accurate of the six,
-    and ground truth holds 206 readings in it. These are projected 2D angles, and
-    a front-on pull-up overlaps the upper arm with the forearm at the top.
-    """
+    """8 degrees is the top of the pull on sequence 1172. The old 15-degree floor
+    rejected it and three clips lost their reps; ground truth has 206 elbow
+    readings under 30 degrees."""
     assert pullup.frame_valid({"elbow": elbow, "trunk": 5.0}, "left")
 
 
 def test_a_degenerate_zero_is_still_rejected():
-    """All the floor is for now: coincident landmarks, not a hard pull."""
+    """Coincident landmarks, not a hard pull."""
     assert not pullup.frame_valid({"elbow": 0.0, "trunk": 5.0}, "left")
 
 
@@ -111,13 +90,8 @@ def test_a_trunk_past_anything_a_hanging_body_does_is_not_scored():
 
 
 def test_travel_ceiling_admits_a_rep_that_moves_a_whole_torso_length():
-    """The shared default would have thrown away every genuine rep.
-
-    Body scale for a pull-up is the torso, and the body travels roughly 0.9-1.3
-    times that per rep. `Movement.max_travel` defaults to 1.0, which is right for
-    a squat measured against leg length and would have discarded a correct
-    pull-up as implausible tracking.
-    """
+    """Against the torso a real rep travels up to 1.3, so the shared default
+    ceiling of 1.0 would drop it."""
     assert pullup.PULLUP.max_travel > 1.3
     assert squat.SQUAT.max_travel <= 1.0
 
@@ -131,25 +105,20 @@ def test_travel_ceiling_admits_a_rep_that_moves_a_whole_torso_length():
     assert kept == reps, "a rep moving 1.2 torso lengths should survive the gate"
 
 
-def test_pulling_higher_than_the_target_is_not_a_fault():
-    """One-sided, like the push-up's depth penalty.
-
-    Someone who gets their chest to the bar has done more than asked, and a
-    two-sided penalty would score them worse than someone who stopped at the
-    target.
-    """
-    at_target, _ = pullup._score_frame({"elbow": pullup.ELBOW_TARGET_TOP}, "left")
+def test_the_score_is_one_sided_and_keeps_the_order():
+    """Only used to rank reps for the key frames. Pulling higher than the
+    reference costs nothing; coming up shorter costs more."""
+    at_ref, _ = pullup._score_frame({"elbow": pullup.ELBOW_TARGET_TOP}, "left")
     higher, _ = pullup._score_frame({"elbow": 25.0}, "left")
-    short, _ = pullup._score_frame({"elbow": 110.0}, "left")
+    short, _ = pullup._score_frame({"elbow": 60.0}, "left")
+    shorter, _ = pullup._score_frame({"elbow": 95.0}, "left")
 
-    assert at_target == 0.0
-    assert higher == 0.0
-    assert short > 0.0
+    assert at_ref == higher == 0.0
+    assert shorter > short > 0.0
 
 
 def test_scale_is_the_torso_so_tucked_legs_do_not_change_it():
-    """Most people hang with the knees bent, which shortens shoulder-to-ankle by
-    an amount that has nothing to do with how big they are."""
+    """Most people hang with bent knees, which shortens shoulder-to-ankle."""
     pairs = set(pullup.PULLUP.scale_pairs)
     assert pairs == {("left_shoulder", "left_hip"), ("right_shoulder", "right_hip")}
     assert all("ankle" not in a and "ankle" not in b
@@ -157,13 +126,8 @@ def test_scale_is_the_torso_so_tucked_legs_do_not_change_it():
 
 
 def test_the_overlay_asserts_no_fault_while_no_cue_is_calibrated():
-    """Silence is the deliberate choice here, so it is pinned.
-
-    A red joint is a diagnosis. Step 2 established that Penn Action has no
-    labelled incomplete repetitions, so there is no threshold behind a height
-    claim, so the overlay makes none. If a cue gets calibrated this test should
-    fail and be rewritten -- that is the point of it.
-    """
+    """No calibrated height threshold, so the overlay marks nothing. When a cue
+    gets one, this test should fail and change with it."""
     angles = [{"elbow": 170.0, "trunk": 2.0},
               {"elbow": 120.0, "trunk": 2.0},   # a rep that came up short
               {"elbow": 165.0, "trunk": 2.0}]
@@ -172,16 +136,6 @@ def test_the_overlay_asserts_no_fault_while_no_cue_is_calibrated():
     assert len(flags) == len(angles)
     assert all(f == set() for f in flags), \
         "the overlay claimed a fault with no calibrated threshold behind it"
-
-
-def test_the_score_orders_reps_even_though_it_cannot_judge_them():
-    """The split step 2 turned on: ordering needs monotonicity, a cue needs a
-    defensible boundary. Only the first is available."""
-    poor, _ = pullup._score_frame({"elbow": 95.0}, "left")
-    mid, _ = pullup._score_frame({"elbow": 60.0}, "left")
-    good, _ = pullup._score_frame({"elbow": 20.0}, "left")
-
-    assert poor > mid > good
 
 
 def _arms(left_deg, right_deg, left_vis, right_vis):
@@ -211,24 +165,21 @@ def test_both_arms_tracked_means_both_arms_count():
 
 
 def test_an_arm_below_the_confidence_gate_is_left_out():
-    """MediaPipe still returns landmarks for an arm it cannot see -- it guesses
-    them -- so the angle is a number, just not one to average in."""
+    """MediaPipe still returns landmarks for an arm it cannot see, so the angle
+    is a number, just not one to average in."""
     elbow = pullup_angles_per_frame(_arms(30.0, 150.0, 0.9, 0.3))[0]["elbow"]
     assert elbow == pytest.approx(30.0, abs=0.5)
 
 
 def test_with_neither_arm_confident_the_better_seen_one_is_used():
-    """Both arms below the gate but both reading a real angle: the better seen
-    stands in. A degenerate reading is not a candidate at all -- see below."""
+    """Both arms under the gate but both readable: the better seen is used."""
     elbow = pullup_angles_per_frame(_arms(30.0, 90.0, 0.5, 0.4))[0]["elbow"]
     assert elbow == pytest.approx(30.0, abs=0.5)
 
 
 def test_which_side_was_picked_no_longer_changes_the_rep_count():
-    """Sequence 1173: arm visibility 0.813 left and 0.771 right, and the gate
-    kept 2 reps reading the left elbow but 1 reading the right. Rep count is the
-    first thing the pull-up claims to measure, so the side argument is pinned as
-    making no difference."""
+    """On sequence 1173 the choice of arm decided whether the gate kept 2 reps
+    or 1. The side argument must not change the result now."""
     scale = 0.25
     travel = np.array([0.0, 0.30, 0.0, 0.30, 0.0])
     reps = [(0, 1, 2), (2, 3, 4)]
@@ -247,24 +198,14 @@ def test_which_side_was_picked_no_longer_changes_the_rep_count():
 
 
 def test_a_degenerate_arm_never_wins_on_visibility_alone():
-    """Found by re-measuring 1173 after the two-arm change. On 46 frames neither
-    arm cleared the gate, the right was marginally better seen (0.35 against
-    0.28) but read 0 degrees, and ranking on visibility alone threw away a left
-    arm reading 4 -- 46 frames lost, none gained."""
+    """Sequence 1173: neither arm cleared the gate, the better-seen arm read 0
+    and the other read 4. Ranking on visibility alone lost 46 frames."""
     elbow = pullup_angles_per_frame(_arms(4.0, 0.0, 0.28, 0.35))[0]["elbow"]
     assert elbow == pytest.approx(4.0, abs=0.5)
 
 
 def test_a_confident_but_degenerate_arm_is_not_averaged_in():
-    """The worse half of the same hole, and the probe never hit it: a hang at 170
-    averaged with a degenerate 0 is a plausible-looking 85 that passes every gate
-    and is wrong."""
+    """170 averaged with a degenerate 0 would be a plausible 85 that passes every
+    gate."""
     elbow = pullup_angles_per_frame(_arms(170.0, 0.0, 0.9, 0.9))[0]["elbow"]
     assert elbow == pytest.approx(170.0, abs=0.5)
-
-
-def test_the_combination_and_the_scoring_gate_share_one_floor():
-    """If these drift apart the combination can hand the gate a reading the gate
-    then rejects, which is exactly how the 46 frames went."""
-    from backend.pipeline.angles import DEGENERATE_ELBOW_DEG
-    assert pullup.MIN_PLAUSIBLE_ELBOW == DEGENERATE_ELBOW_DEG

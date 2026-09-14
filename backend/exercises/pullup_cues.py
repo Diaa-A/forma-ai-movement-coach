@@ -1,29 +1,16 @@
 """Layer 1 for the pull-up: the cue database and the evaluator that fires it.
 
-Same contract as `squat_cues.py` and `pushup_cues.py` — `fault` and `fix` kept
-apart so it stays obvious which side Layer 2 is rephrasing, and cues whose
-detector is not trustworthy carrying `available: False`.
+Same contract as `squat_cues.py` and `pushup_cues.py`: `fault` and `fix` are kept
+apart so it is clear what Layer 2 rephrases, and a cue with no trustworthy
+detector carries `available: False` and never fires.
 
-**Four of the five cues here are parked, which is the outcome of calibration
-rather than an oversight.** WP-08 step 2 measured all 25 Penn Action sequences
-and found the pipeline reads a pull-up well — 5.5 degrees of elbow error in the
-deep-flexion band these cues would read, against 9.1 overall — but Penn Action
-labels what an action is, not whether it was done well. There is no incomplete
-repetition in the set to calibrate a boundary against, and across 26
-repetitions the elbow at the top ran 2.6 to 86.3 degrees in one unbroken
-spread. A threshold placed in that range would separate a population from
-itself.
+Four of the five cues are parked. The pull-up is measured well, but calibration
+found nothing to set a height or extension threshold from (see `pullup.py`). The
+cue that does fire compares the reps in a set with each other, so all it needs to
+know is how much difference is bigger than the measurement error.
 
-The one cue that does fire needs no such boundary, which is why it survived. It
-compares a repetition against the others in the same set, so the person is their
-own reference, and the only number it needs is how much difference exceeds the
-instrument. That number is measured.
-
-The camera view is the other thing that differs. Pull-ups are filmed from the
-front — median shoulder separation across the subset was 0.34 of torso length,
-where a genuinely side-on view collapses the shoulders on top of each other —
-because the bar is overhead and the photographer stands in front of it. So the
-frontal plane is the productive one here, the reverse of both other exercises.
+The profile is front-on, the reverse of the squat and the push-up, so the
+assessments sit in the frontal plane.
 """
 from __future__ import annotations
 
@@ -33,7 +20,6 @@ import numpy as np
 
 from .base import ExerciseProfile, FRONTAL, SAGITTAL, coverage_guidance
 from .mechanics import CueHit, Evaluation
-from .pullup import frame_valid
 from . import pullup
 
 
@@ -59,12 +45,9 @@ PULLUP_CUES = {
         "joints": ["left_elbow", "right_elbow"],
         "phase": "bottom",
         "plane": FRONTAL,
-        # Parked, and the reason is not the usual one. This is measurable: elbow
-        # error at deep flexion is 5.5 degrees, the best band of the six. What is
-        # missing is any labelled partial repetition to set the boundary from.
-        # Across 26 scored reps the elbow at the top ran 2.6 to 86.3 with no
-        # division anywhere in it, so a threshold would be invented rather than
-        # calibrated. Unparks when clips with known partial reps exist.
+        # Parked. The elbow is measured well in this range (5.5 degrees of error),
+        # but there is no labelled partial rep to set a boundary from: across 26
+        # reps the elbow at the top ran 2.6 to 86.3 with no gap in it.
         "available": False,
     },
     "incomplete_extension": {
@@ -76,9 +59,8 @@ PULLUP_CUES = {
         "joints": ["left_elbow", "right_elbow"],
         "phase": "bottom",
         "plane": FRONTAL,
-        # Same reason as partial_range. Elbow at the hang is well measured — 6.2
-        # degrees of error, median 174.0 across the set — and nothing in the set
-        # is marked as a partial hang to calibrate against.
+        # Parked for the same reason. Elbow at the hang is measured well (6.2
+        # degrees of error, median 174) and nothing is labelled as a partial hang.
         "available": False,
     },
     "kipping": {
@@ -91,11 +73,9 @@ PULLUP_CUES = {
         "joints": ["left_hip", "right_hip", "left_shoulder", "right_shoulder"],
         "phase": "set",
         "plane": SAGITTAL,
-        # Swing is toward and away from a front-on camera, which is the one
-        # direction it cannot see. Trunk lean across the subset ran 0.6 to 43.9
-        # degrees with a median of 2.9, and the single clip at the top of that
-        # range is visibly a kipping rep -- so the signal exists, from the wrong
-        # view, on one example. Both problems have to be solved before it fires.
+        # Parked. Swing moves toward and away from a front-on camera, and the one
+        # clip with a clear kip (trunk lean 43.9 against a median of 2.9) is not
+        # enough to set a threshold from.
         "available": False,
     },
     "grip_too_wide": {
@@ -106,10 +86,9 @@ PULLUP_CUES = {
         "joints": ["left_wrist", "right_wrist"],
         "phase": "bottom",
         "plane": FRONTAL,
-        # Wrist separation over shoulder separation ran 0.50 to 2.32, which looks
-        # usable until you notice shoulder spread itself varied 0.25 to 0.43 of
-        # torso across the same clips. The ratio moves with camera angle as much
-        # as with grip, so it is confounded rather than measured.
+        # Parked. Wrist separation over shoulder separation ran 0.50 to 2.32, but
+        # shoulder spread itself ran 0.25 to 0.43 of torso over the same clips, so
+        # the ratio follows camera angle as much as grip.
         "available": False,
     },
 }
@@ -132,17 +111,12 @@ PULLUP_PROFILE = ExerciseProfile(
                    "other and there is nothing this system can do about that."),
     plane_assessments={
         FRONTAL: ["repetition count", "how consistent your range of motion is"],
-        # Deliberately empty. Nothing is claimed for the sagittal plane, because
-        # the only thing that lives there for a pull-up is body swing and that is
-        # parked. Listing it would read as coverage.
+        # Empty on purpose: body swing is the only sagittal assessment and it is
+        # parked, so listing it here would read as covered.
         SAGITTAL: [],
     },
-    # No item carries a comma or an "and" of its own. coverage_guidance joins
-    # them with both, and the old wording rendered as "... body swing and kipping
-    # and grip width" -- three things or two, depending on where you breathe.
-    # Tempo and left/right evenness were declared nowhere until the audit turned
-    # them up, and both squat and push-up time the lowering, so a pull-up user
-    # is going to ask.
+    # coverage_guidance joins these with commas and a final "and", so no item can
+    # contain either.
     not_yet_assessed=["whether your chin clears the bar",
                       "whether your arms straighten fully between reps",
                       "body swing or kipping",
@@ -152,16 +126,11 @@ PULLUP_PROFILE = ExerciseProfile(
 )
 
 
-# Spread of the top-of-rep elbow angle across a set, past which the reps really
-# did differ. Set from the instrument rather than from labelled form, which is
-# what makes it defensible when the other thresholds were not: elbow error per
-# arm is 5.5 to 6.7 degrees over the angles this reads, so a spread of 20 is
-# roughly three times the noise and cannot be the measurement wobbling. The cue
-# now reads both arms averaged, and that average has not been benchmarked on its
-# own, so the per-arm figure is the one this leans on.
-#
-# It matches the push-up's depth-inconsistency figure, which is a coincidence of
-# the same reasoning rather than a value copied across.
+# Spread of the top-of-rep elbow angle across a set beyond which the reps really
+# differed. Set from measurement error rather than labelled form: per-arm elbow
+# error is 5.5 to 6.7 degrees over the angles this reads, so 20 is about three
+# times the noise. The two-arm average this now reads has not been benchmarked
+# on its own.
 _RANGE_INCONSISTENCY_DEG = 20.0
 
 
@@ -183,13 +152,10 @@ def evaluate_pullup(angles_per_frame, reps, side, fps, phase_per_frame=None,
                     landmarks=None):
     """Fire the cue database against one analysed set.
 
-    Shorter than its two siblings because four of the five cues are parked. What
-    is left reads the elbow at the top of each rep -- both arms averaged, not a
-    chosen side -- and asks whether the reps agreed with each other.
-
-    `phase_per_frame` and `landmarks` are accepted and unused. Every cue that
-    would need them is parked, and the signature is shared with the other two
-    evaluators so the registry can call any of them the same way.
+    Reads the elbow at the top of each rep, both arms combined, and checks the
+    reps against each other. `phase_per_frame` and `landmarks` are unused -- the
+    cues that would need them are parked -- but stay in the signature the
+    registry calls every evaluator with.
     """
     fired = {}
     notes: List[str] = []
@@ -204,8 +170,7 @@ def evaluate_pullup(angles_per_frame, reps, side, fps, phase_per_frame=None,
         if f is None:
             continue
         angle = angles_per_frame[f].get(key)
-        if (angle is not None and np.isfinite(angle)
-                and frame_valid(angles_per_frame[f], side)):
+        if angle is not None and np.isfinite(angle):
             tops.append(float(angle))
 
     spread = max(tops) - min(tops) if len(tops) >= 2 else None
@@ -222,19 +187,16 @@ def evaluate_pullup(angles_per_frame, reps, side, fps, phase_per_frame=None,
         notes.append("spread between the highest and lowest rep: {:.0f}° "
                      "(tolerance {:.0f}°)".format(spread, _RANGE_INCONSISTENCY_DEG))
 
-    # Always True: a pull-up is filmed front-on, so the frontal plane is the one
-    # the clip is expected to reach. This leaves coverage_guidance to say what is
-    # not assessed yet, which for this exercise is most of it.
+    # A pull-up is filmed front-on, so the frontal plane is always the one in view
+    # and coverage_guidance only has to list what is not assessed yet.
     guidance = coverage_guidance(PULLUP_PROFILE, frontal_observed=True)
     view_guidance = guidance if reps else None
     if view_guidance:
         notes.append(view_guidance)
 
-    # "both", not the side the runner picked. This goes to Layer 2 as
-    # side_analysed, and the elbow it describes is both arms averaged, so
-    # passing "left" would invite "your left arm did not come up as high" --
-    # something nothing measured. The results screen's side chip is read from
-    # the runner's pick rather than from here, so that still names one arm.
+    # "both" rather than the runner's pick: the elbow measured is both arms, and
+    # Layer 2 should not be handed one side to talk about. The results screen's
+    # side chip still shows the runner's pick.
     return Evaluation(
         exercise="pullup",
         side="both",

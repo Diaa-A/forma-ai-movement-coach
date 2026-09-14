@@ -2,21 +2,15 @@
 
     python scripts/calibrate_pullup.py
 
-WP-08 step 1 shipped `pullup.py` with every cue threshold marked PROVISIONAL,
-measured on an eight-sequence probe that was enough to establish direction and
-not enough to set a number. This measures all 25 and reports what they support.
+Measures all 25 pull-up sequences through the path the app uses -- smooth,
+angles, travel with the effort-at-top flip, bottom detection, rep segmentation,
+the rep gate -- so the numbers describe reps the system would actually score.
 
-Runs the real pipeline path per sequence -- smooth, angles, travel, the
-effort-at-top flip, bottom detection, rep segmentation, the rep gate -- so the
-numbers describe reps the system would actually score, not an idealised pass over
-the frames.
-
-Two things are measured in the same pass because both need MediaPipe over the
-same footage:
+Both measurements come out of one pass over the footage:
 
     resolution  elbow-angle error against Penn Action ground truth. A gap in the
-                distributions narrower than this is not a class boundary the
-                pipeline can resolve, so it is the floor on any threshold
+                distributions narrower than this is not a boundary the pipeline
+                can resolve, so it is the floor on any threshold
     spread      per-rep elbow at the top and at the hang, travel against body
                 scale, and trunk lean
 
@@ -123,10 +117,7 @@ def measure(seq):
         w, h = pose["sizes"][i]
         if w == 0:
             continue
-        try:
-            pred = mp_to_pixels(lm[i], w, h)
-        except Exception:
-            continue
+        pred = mp_to_pixels(lm[i], w, h)
         d = angle_errors(pred, seq.gt_xy(i), seq.gt_visibility(i))
         errs.extend(v for k, v in d.items() if k.startswith("elbow"))
 

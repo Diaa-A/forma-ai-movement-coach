@@ -40,9 +40,8 @@ SOURCES = {
     "pullup": ROOT / "data" / "outputs" / "penn_eval_pullup" / "metrics.json",
 }
 
-# Column order and headings for the comparison table. Driven off one list so
-# adding a fourth exercise is an entry here rather than an edit in six places --
-# which is what adding the third one turned out to be.
+# Column order and headings for the comparison table. Another exercise is one
+# entry here; before this list it meant editing six hardcoded pairs.
 ACTIONS = [("squat", "squat"), ("pushup", "push-up"), ("pullup", "pull-up")]
 
 
@@ -236,12 +235,10 @@ def table(d: dict) -> str:
     L.append("PCK is lower for push-up (0.799 vs 0.871) and the comparison is not")
     L.append("like-for-like — see pck_definition in the JSON.")
     L.append("")
-    L.append("The pull-up is the best-tracked of the three on every aggregate measure:")
-    L.append("95.9% detection against 84-87%, the lowest MPJPE either way, the highest")
-    L.append("PCK. It is also the exercise that ships with four of its five cues parked,")
-    L.append("because Penn Action holds no incomplete repetition to calibrate a form")
-    L.append("threshold against. How well a movement can be MEASURED and how much can be")
-    L.append("SAID about it are independent, and this is the clearest case of it.")
+    L.append("The pull-up is the best-tracked of the three on every aggregate measure")
+    L.append("(95.9% detection against 84-87%, lowest MPJPE, highest PCK), and also the")
+    L.append("one with four of its five cues parked: Penn Action holds no incomplete")
+    L.append("repetition to calibrate a form threshold against.")
     return "\n".join(L)
 
 
