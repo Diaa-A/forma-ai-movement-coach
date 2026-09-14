@@ -122,11 +122,9 @@ def test_the_failure_report_works_without_a_profile():
 
 @pytest.mark.parametrize("exercise", ["squat", "pushup", "pullup"])
 def test_the_fallback_does_not_call_an_unchecked_set_clean(exercise):
-    """With no cue fired, the dry-run used to say "No major form fault was
-    detected". None of the three exercises checks everything -- the squat skips
-    knee cave, the push-up skips elbow flare, and the pull-up parks four of its
-    five cues -- so it read as a clean bill of health on things never looked
-    at."""
+    """With no cue fired this said "No major form fault was detected", which
+    spoke for faults that were never checked: knee cave on the squat, elbow
+    flare on the push-up, four parked cues on the pull-up."""
     report = coaching._dry_run_report(an_evaluation(exercise))
     assert "no major form fault" not in report.primary_issue.lower()
     assert "checks for" in report.primary_issue
