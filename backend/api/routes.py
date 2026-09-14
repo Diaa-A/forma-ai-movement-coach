@@ -151,8 +151,8 @@ def exercises():
 
     The PWA calls this on load to build the exercise picker and, more usefully,
     to show the filming guidance *before* the user records anything — bad camera
-    placement is the single biggest cause of a clip we can't assess properly
-    (Decision 23), and it's much cheaper to prevent than to detect.
+    placement is the single biggest cause of a clip we can't assess properly,
+    and it's much cheaper to prevent than to detect.
     """
     return ExercisesResponse(
         exercises=[

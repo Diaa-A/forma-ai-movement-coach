@@ -18,8 +18,8 @@ const VIEW_FOR_PLANE: Record<string, string> = {
  *
  * Camera placement is the biggest single cause of a clip the system can't assess
  * properly — a side-on view physically cannot show left/right symmetry, and
- * guessing at an occluded limb is how you get a confidently wrong answer
- * (Decision 19 and 23). Telling someone up front costs one screen. Detecting it
+ * guessing at an occluded limb is how you get a confidently wrong answer.
+ * Telling someone up front costs one screen. Detecting it
  * afterwards costs them a re-shoot.
  *
  * Every string here comes from the backend profile, so this screen and the

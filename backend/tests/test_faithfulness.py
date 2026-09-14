@@ -188,7 +188,7 @@ def test_a_corrective_cue_restating_the_fix_is_not_a_contradiction():
 # ---------------------------------------------------------------------------
 
 def test_symmetry_claims_are_flagged_when_the_gate_withheld_it():
-    """Decision 19: on a side-on clip the far leg is occluded, so the left/right
+    """On a side-on clip the far leg is occluded, so the left/right
     comparison is withheld. A model claiming symmetry is claiming a measurement
     the system deliberately refused to make."""
     ev = evaluation(cues=[LEAN])
@@ -278,7 +278,7 @@ def test_referring_the_user_to_a_professional_is_not_a_violation():
 # ---------------------------------------------------------------------------
 
 def test_the_filming_tip_is_excluded_from_scoring():
-    """It is generated deterministically and never by the model (Decision 23), so
+    """It is generated deterministically and never by the model, so
     scoring it would credit or blame the LLM for text it did not write."""
     ev = evaluation(cues=[LEAN])
     auth = F.authorised_from(ev)

@@ -234,7 +234,7 @@ PY -m pip install openai-whisper
 ```
 
 Pulls in torch (~2 GB on CPU). Not needed in normal use: transcription defaults to
-Groq-hosted `whisper-large-v3` (Decision 22). This is the offline fallback only.
+Groq-hosted `whisper-large-v3`. This is the offline fallback only.
 
 ## File layout
 

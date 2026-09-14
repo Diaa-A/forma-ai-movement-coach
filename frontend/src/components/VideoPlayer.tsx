@@ -8,7 +8,7 @@ interface Props {
 /**
  * The annotated clip.
  *
- * It is written as H.264 in an MP4 with faststart (Decision 24), which every
+ * It is written as H.264 in an MP4 with faststart, which every
  * target browser plays — but "should play" and "does play on this particular
  * phone" are different claims, and this is the one screen where being wrong
  * leaves the user staring at a black box. So the error path is real: if the

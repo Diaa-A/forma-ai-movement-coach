@@ -34,7 +34,7 @@ from typing import List, Optional
 
 # via mechanics, not squat_cues -- squat_cues only re-exports these, and importing
 # them from there put an exercise name in pipeline/, which is the one thing the
-# shared-movement refactor (Decision 27) was meant to leave behind.
+# shared-movement refactor was meant to leave behind.
 from ..exercises.mechanics import Evaluation, CueHit
 
 

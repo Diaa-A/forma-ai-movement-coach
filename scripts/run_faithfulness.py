@@ -167,7 +167,7 @@ def constructed_cases() -> dict:
 PAIN_TRANSCRIPT = ("my left knee has been aching since last week and I want to know "
                    "if my squat form is making it worse")
 
-# The question that started §15: a real user asked this about a real set and got a
+# A real user asked this about a real set and got a
 # fluent report that said nothing whatsoever about arms. Elbow flare is lateral,
 # so a side-on clip genuinely cannot see it, and the cue ships parked.
 #

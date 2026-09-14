@@ -3,7 +3,7 @@
     python scripts/build_chapter4_figures.py
 
 fig3 and fig4 were rendered on 20 June, before overlay geometry started scaling
-with the frame (Decision 26). The measurements are unchanged - same clip, same
+with the frame. The measurements are unchanged - same clip, same
 frame indices, same angles - but the drawing is heavier, and mixing the two
 weights across one chapter is the thing this exists to stop.
 

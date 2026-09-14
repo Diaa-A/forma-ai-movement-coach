@@ -204,7 +204,7 @@ def authorised_from(evaluation: Evaluation, voice_transcript: str = "") -> Autho
 
     # Symmetry is the confidence-gated one: the cue layer only awards the
     # positive, or fires the asymmetry cue, when the far side was actually
-    # visible. If neither happened the measurement was withheld (Decision 19)
+    # visible. If neither happened the measurement was withheld
     # and any claim about it is unsupported by definition.
     fired = [c.flag for c in evaluation.cues_fired]
     symmetry_assessed = (
@@ -329,7 +329,7 @@ def _claim_sentences(report: coaching.CoachingReport) -> Sections:
     """Split the report into what it claims and what it advises.
 
     `filming_tip` is excluded from both: it is generated deterministically and
-    never by the model (Decision 23), so including it would credit or blame the
+    never by the model, so including it would credit or blame the
     LLM for text it did not write.
     """
     return Sections(

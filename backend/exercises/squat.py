@@ -1,7 +1,6 @@
 """Squat-specific analysis — phase boundaries, rep validity, form scoring.
 
-Phase B implementation . Form scoring follows the biomechanical standards in the
-spec (§5 Phase B):
+Phase B implementation . Form scoring follows these biomechanical standards:
     - Knee at bottom should reach ~90° (parallel). Deeper is fine if mobility
       allows — only "not deep enough" is a fault.
     - Spine should stay >45° from horizontal, i.e. forward lean from vertical

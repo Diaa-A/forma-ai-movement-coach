@@ -24,7 +24,7 @@ is measured from when the data was created, not from when someone last looked at
 it.
 
 RETENTION_HOURS is the single source. The consent copy and the UI read it off
-`GET /exercises`, the same way the upload limits are served (Decision 28), so the
+`GET /exercises`, the same way the upload limits are served, so the
 period a user is told cannot drift from the period the code enforces.
 """
 from __future__ import annotations

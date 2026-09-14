@@ -76,7 +76,7 @@ describe('a clip that analysed cleanly', () => {
   })
 
   it('keeps the filming tip separate from the coaching prose', () => {
-    // it is deterministic, never LLM-written (Decision 23) — if it were folded
+    // it is deterministic, never LLM-written — if it were folded
     // into the report body that distinction would be invisible to the user
     const { container } = show(okResult)
     const tip = container.querySelector('.filming-tip')

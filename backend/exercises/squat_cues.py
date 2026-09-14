@@ -2,7 +2,7 @@
 
 Every entry is a pre-vetted coaching statement. The LLM in Layer 2 may rephrase
 these for tone but MUST NOT invent new biomechanical claims, weights, or rep
-recommendations. See spec §5 Phase C / §7 (system prompt template).
+recommendations.
 
 Rationale for the "fault wording" + "fix wording" split: the fault tells the
 user WHAT was wrong (their model of what happened); the fix tells them what to

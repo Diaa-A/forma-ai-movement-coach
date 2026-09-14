@@ -136,8 +136,8 @@ def test_straight_body_positive_is_withheld_when_it_sagged():
 def test_symmetry_is_withheld_without_landmarks_to_check_it():
     """Cross-side comparison needs the far arm to actually be visible. With no
     landmark array there is nothing to gate on, so the cue must stay silent rather
-    than claim a symmetry it could not measure -- Decision 19 applied to a new
-    exercise without new machinery."""
+    than claim a symmetry it could not measure -- the squat's confidence gate,
+    applied to a new exercise without new machinery."""
     angles, reps = _set_of_reps(3, elbow=85.0, body=3.0)
     ev = evaluate_pushup(angles, reps, "left", 30.0, landmarks=None)
     assert "elbow_asymmetry" not in [c.flag for c in ev.cues_fired]

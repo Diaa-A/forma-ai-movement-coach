@@ -63,8 +63,8 @@ describe('service worker caching policy', () => {
   const sw = readFileSync(resolve(__dirname, '../../public/sw.js'), 'utf8')
 
   it('never caches /results/* — those are videos of the user', () => {
-    // Decision 22 promises deletion and no retention. Writing body footage into
-    // a device cache outside that promise would contradict the consent form.
+    // Uploads are deleted after the retention period. Caching body footage on
+    // the device would keep it past that and contradict the consent form.
     expect(sw).toMatch(/\/results\//)
     const line = sw.split('\n').find((l) => l.includes("startsWith('/results/')"))
     expect(line, 'no guard for /results/ at all').toBeDefined()

@@ -289,7 +289,7 @@ def _windows_mostly_valid(movement: Movement, reps, angles_per_frame, side):
     100% valid, the tenth 73%, and the false one 44%.
 
     Applied before the travel and flexion gates rather than after, for the reason
-    the travel ceiling exists (Decision 25): both of those calibrate a ratio
+    the travel ceiling exists: both of those calibrate a ratio
     against the clip's own maximum, and a segment of tracking noise in the sample
     distorts what "normal" means for every real rep beside it.
     """
@@ -479,7 +479,7 @@ def joints_visible(landmarks, frame, names, threshold) -> bool:
     """Are all of these landmarks confidently tracked on this frame?
 
     Used to suppress cues that depend on a joint the model is guessing at, rather
-    than firing them on unreliable coordinates (Decision 19).
+    than firing them on unreliable coordinates.
     """
     if landmarks is None:
         return False

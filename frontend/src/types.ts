@@ -82,7 +82,7 @@ export interface CoachingReport {
   answer_to_question?: string | null
   source: ReportSource
   model?: string | null
-  /** deterministic camera-view guidance — never LLM-written (Decision 23), so
+  /** deterministic camera-view guidance — never LLM-written, so
    *  it gets its own treatment in the UI rather than being mixed into the prose */
   filming_tip?: string | null
 }

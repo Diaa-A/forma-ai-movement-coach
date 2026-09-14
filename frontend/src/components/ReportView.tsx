@@ -8,7 +8,7 @@ interface Props {
  * The five-part coaching structure, rendered in its locked order:
  * what went well, primary issue, secondary issues, corrective cues, next focus.
  * Plus the filming tip, which gets its own treatment because it is generated
- * deterministically and never by the language model (Decision 23) — mixing it
+ * deterministically and never by the language model — mixing it
  * into the prose would blur a distinction the project makes on purpose.
  *
  * Every section is conditional on having content. That is not tidiness: on a

@@ -72,7 +72,7 @@ _BOTTOM_HALF_WINDOW_FRAMES = 4
 def label_phases(reps, n_frames, bottom_window=_BOTTOM_HALF_WINDOW_FRAMES):
     """Assign a phase tag to every frame in the video.
 
-    Rules (per spec §5 Phase B):
+    Rules:
         - descent  = inside a rep, before the bottom plateau
         - bottom   = within +/- `bottom_window` frames of the rep's bottom index
         - ascent   = inside a rep, after the bottom plateau
