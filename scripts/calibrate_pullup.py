@@ -82,9 +82,11 @@ def measure(seq):
     travel_s = smooth_series(travel, ts, min_cutoff=0.5, beta=0.001)
 
     bottoms = detect_bottoms(travel_s, min_separation=max(3, int(NOMINAL_FPS * 0.4)))
-    reps_all = segment_reps(bottoms, len(paths))
-    side = mechanics.pick_side(pullup.PULLUP, lm_s, reps_all)
     scale = mechanics.body_scale(pullup.PULLUP, lm_s)
+    reps_all = segment_reps(
+        mechanics.merge_bottoms_without_return(pullup.PULLUP, bottoms, travel_s, scale),
+        len(paths))
+    side = mechanics.pick_side(pullup.PULLUP, lm_s, reps_all)
     reps = pullup.keep_real_reps(reps_all, travel_s, scale,
                                  angles_per_frame=angles, side=side,
                                  fps=NOMINAL_FPS)

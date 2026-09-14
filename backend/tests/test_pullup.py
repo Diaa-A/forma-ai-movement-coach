@@ -71,6 +71,38 @@ def test_only_the_pullup_inverts_its_travel():
     assert np.allclose(mechanics.travel_for_phase(pullup.PULLUP, y), -y)
 
 
+def _two_tops(dip):
+    """Travel as phase detection sees it, higher meaning the body is higher: a
+    pull, a dip of `dip` between two tops, and the lowering."""
+    rise = np.linspace(0.0, 1.0, 30)
+    between = 1.0 - dip * (0.5 - 0.5 * np.cos(np.linspace(0.0, 2 * np.pi, 60)))
+    lower = np.linspace(1.0, 0.0, 30)
+    return np.concatenate([rise, between, lower])
+
+
+def test_a_hold_at_the_top_counts_once():
+    """Held at the top, the hips wobble and the detector finds two turns."""
+    y = _two_tops(dip=0.002)
+    bottoms = detect_bottoms(y, min_separation=5)
+    assert len(bottoms) == 2
+    assert len(mechanics.merge_bottoms_without_return(pullup.PULLUP, bottoms, y, 1.0)) == 1
+
+
+def test_lowering_between_two_pulls_still_counts_two():
+    y = _two_tops(dip=0.9)
+    bottoms = detect_bottoms(y, min_separation=5)
+    assert len(bottoms) == 2
+    assert mechanics.merge_bottoms_without_return(pullup.PULLUP, bottoms, y, 1.0) == bottoms
+
+
+def test_only_the_pullup_merges_bottoms_without_a_return():
+    """Guard: on the push-up clips the rule merged real reps, because the hips
+    barely move between them."""
+    assert pullup.PULLUP.min_return > 0
+    assert squat.SQUAT.min_return == 0
+    assert pushup.PUSHUP.min_return == 0
+
+
 @pytest.mark.parametrize("elbow", [8.0, 14.9, 17.0, 27.4])
 def test_a_deeply_folded_elbow_is_a_measurement_not_a_glitch(elbow):
     """8 degrees is the top of the pull on sequence 1172. The old 15-degree floor

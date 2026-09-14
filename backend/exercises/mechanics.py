@@ -89,6 +89,10 @@ class Movement:
     travel_rel_floor: float = 0.35
     min_flexion: float = 30.0      # degrees off straight before a dip counts
     flexion_rel_floor: float = 0.4
+    # How far travel has to come back between two bottoms, as a multiple of body
+    # scale, before the second counts as another rep. 0 keeps every bottom the
+    # detector finds. See merge_bottoms_without_return.
+    min_return: float = 0.0
     # How much of a rep's window has to survive the per-frame validity gate for
     # the rep to be scoreable at all. See _windows_mostly_valid.
     min_valid_fraction: float = 0.6
@@ -270,6 +274,35 @@ def axis_looks_rotated(movement: Movement, tilt) -> bool:
 # ---------------------------------------------------------------------------
 # which detected bottoms are actually reps
 # ---------------------------------------------------------------------------
+
+
+def merge_bottoms_without_return(movement: Movement, bottoms, travel_y, scale):
+    """Count two bottoms as one rep when the body never came back between them.
+
+    detect_bottoms marks every turn in the travel signal, so a hold at the extreme
+    that wobbles, or a bump on the way back, becomes another bottom and another
+    rep. A pull-up held at the top for about three seconds was counted twice on a
+    wobble of 0.002 of the frame height. With `min_return` set, a later bottom
+    counts only once travel has come back by that multiple of body scale since the
+    previous one; otherwise the two are one rep, placed at whichever went further.
+    """
+    if (movement.min_return <= 0 or len(bottoms) < 2 or not scale
+            or not np.isfinite(scale) or scale <= 0):
+        return list(bottoms)
+    y = np.asarray(travel_y, dtype=np.float64)
+    kept = [bottoms[0]]
+    for b in bottoms[1:]:
+        a = kept[-1]
+        between = y[a:b + 1]
+        between = between[np.isfinite(between)]
+        ends = [v for v in (y[a], y[b]) if np.isfinite(v)]
+        if not between.size or not ends:
+            kept.append(b)
+        elif min(ends) - between.min() >= movement.min_return * scale:
+            kept.append(b)
+        elif np.isfinite(y[b]) and (not np.isfinite(y[a]) or y[b] > y[a]):
+            kept[-1] = b
+    return kept
 
 
 def _windows_mostly_valid(movement: Movement, reps, angles_per_frame, side):

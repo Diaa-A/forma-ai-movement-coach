@@ -129,6 +129,9 @@ PULLUP = Movement(
     travel_rel_floor=TRAVEL_REL_FLOOR,
     min_flexion=MIN_REP_ELBOW_FLEXION,
     flexion_rel_floor=MIN_REP_FLEXION_RATIO,
+    # a second rep needs the body to come back down at least as far as one rep has
+    # to travel, or a hold at the top counts twice
+    min_return=TRAVEL_ABS_FLOOR,
     effort_at_top=True,
 )
 

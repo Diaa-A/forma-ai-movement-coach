@@ -162,9 +162,11 @@ def run_pipeline(input_path, output_root, exercise: str = "squat",
     bottoms = detect_bottoms(hip_y_smooth, min_separation=max(3, int(fps * 0.4)))
 
     # -- side / rep validity (by body travel) / phases / scoring
-    reps_all = segment_reps(bottoms, n_frames)
-    side = mechanics.pick_side(movement, lm_smooth, reps_all)
     scale = mechanics.body_scale(movement, lm_smooth)
+    reps_all = segment_reps(
+        mechanics.merge_bottoms_without_return(movement, bottoms, hip_y_smooth, scale),
+        n_frames)
+    side = mechanics.pick_side(movement, lm_smooth, reps_all)
     reps = mechanics.keep_real_reps(movement, reps_all, hip_y_smooth, scale,
                                     angles_per_frame=angles, side=side, fps=fps)
     phases = label_phases(reps, n_frames)
