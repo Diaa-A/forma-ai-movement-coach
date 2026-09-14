@@ -14,11 +14,11 @@ shape the rest of the file:
     sequences was 0.34 of torso length; side-on, one shoulder sits almost on top
     of the other. The camera goes in front because the bar is overhead.
 
-Calibrated on all 25 Penn Action sequences. The rep gate's floor and ceiling fit
-the measured travel, but height and extension thresholds could not be set: Penn
-Action labels the action, not how well it was done, so there is no incomplete
-rep to place a boundary against. `pullup_cues.py` parks those cues and declares
-them.
+Calibrated on all 25 Penn Action sequences, tracked the way the app tracks a
+video. The rep gate's floor and ceiling fit the measured travel, but height and
+extension thresholds could not be set: Penn Action labels the action, not how
+well it was done, so there is no incomplete rep to place a boundary against.
+`pullup_cues.py` parks those cues and declares them.
 """
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ from .mechanics import Movement
 
 # Orders the reps in a clip so worst_frame and best_frame can pick one. Not a form
 # threshold, and no cue reads it. 40 is about the 75th percentile of the elbow at
-# the top across the calibration set (26 reps, p75 39.8), so most reps score zero
+# the top across the calibration set (23 reps, p75 40.9), so most reps score zero
 # and the ones that came up short sort to the end.
 ELBOW_TARGET_TOP = 40.0
 

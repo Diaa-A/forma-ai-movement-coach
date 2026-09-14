@@ -91,7 +91,7 @@ Returns JSON with URLs to artefacts served from `/results/<job_id>/`.
 PY -m pytest
 ```
 
-267 tests: angle maths vs known geometry, One Euro behaviour, phase detection on
+270 tests: angle maths vs known geometry, One Euro behaviour, phase detection on
 synthetic signals, rep filter, cue gating, the API's rejection branches, and an
 end-to-end smoke test (the tests that need `data/test_videos/` skip themselves on
 a clean checkout, where test videos are gitignored — a skip there is expected,
@@ -271,7 +271,7 @@ Groq-hosted `whisper-large-v3`. This is the offline fallback only.
 │   │   ├── pushup_cues.py     Layer 1 — push-up cue database + evaluator
 │   │   ├── pullup.py          pull-up scoring, both arms, effort at the top
 │   │   └── pullup_cues.py     Layer 1 — pull-up cues, four of five parked
-│   └── tests/                 267 pytest tests
+│   └── tests/                 270 pytest tests
 ├── frontend/                  the PWA (React + Vite); built output is served by FastAPI
 │   ├── public/                manifest, service worker, icons
 │   └── src/

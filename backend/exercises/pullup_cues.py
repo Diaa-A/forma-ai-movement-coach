@@ -45,9 +45,8 @@ PULLUP_CUES = {
         "joints": ["left_elbow", "right_elbow"],
         "phase": "bottom",
         "plane": FRONTAL,
-        # Parked. The elbow is measured well in this range (5.5 degrees of error),
-        # but there is no labelled partial rep to set a boundary from: across 26
-        # reps the elbow at the top ran 2.6 to 86.3 with no gap in it.
+        # Parked. There is no labelled partial rep to set a boundary from: across 23
+        # reps the elbow at the top ran 0 to 84 with no gap in it.
         "available": False,
     },
     "incomplete_extension": {
@@ -59,8 +58,7 @@ PULLUP_CUES = {
         "joints": ["left_elbow", "right_elbow"],
         "phase": "bottom",
         "plane": FRONTAL,
-        # Parked for the same reason. Elbow at the hang is measured well (6.2
-        # degrees of error, median 174) and nothing is labelled as a partial hang.
+        # Parked for the same reason: nothing is labelled as a partial hang.
         "available": False,
     },
     "kipping": {
@@ -73,9 +71,8 @@ PULLUP_CUES = {
         "joints": ["left_hip", "right_hip", "left_shoulder", "right_shoulder"],
         "phase": "set",
         "plane": SAGITTAL,
-        # Parked. Swing moves toward and away from a front-on camera, and the one
-        # clip with a clear kip (trunk lean 43.9 against a median of 2.9) is not
-        # enough to set a threshold from.
+        # Parked. Swing moves toward and away from a front-on camera, and nothing in
+        # Penn Action is labelled as kipping to set a threshold from.
         "available": False,
     },
     "grip_too_wide": {

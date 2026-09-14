@@ -204,8 +204,8 @@ def pushup_angles_per_frame(landmarks):
 # Two arms that both clear the confidence gate but read further apart than this
 # cannot both be right. Across the Penn Action pull-ups the labelled left and
 # right elbows never differed by more than 42.9 degrees, while the tracked ones
-# did on 1.6 to 2.5% of frames where both were confidently seen. Those frames get
-# no reading rather than an average neither arm measured.
+# did on 19 of 1178 frames where both were confidently seen. Those frames get no
+# reading rather than an average neither arm measured.
 ARM_DISAGREEMENT_DEG = 45.0
 
 

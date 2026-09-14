@@ -2,17 +2,22 @@
 
     python scripts/calibrate_pullup.py
 
-Measures all 25 pull-up sequences through the path the app uses -- smooth,
-angles, travel with the effort-at-top flip, bottom detection, rep segmentation,
-the rep gate -- so the numbers describe reps the system would actually score.
+Each sequence's frames are written to a near-lossless video and tracked with the
+app's own VIDEO-mode extraction, then taken through the runner's steps --
+smoothing, angles, travel with the effort-at-top flip, bottom detection, bottoms
+merged without a return, rep segmentation, the rep gate. The Penn Action benchmark
+detects pose per image, which is right for pose accuracy but counted differently
+from the app on the same clips.
 
-Both measurements come out of one pass over the footage:
+One pass gives:
 
-    resolution  elbow-angle error against Penn Action ground truth. A gap in the
-                distributions narrower than this is not a boundary the pipeline
-                can resolve, so it is the floor on any threshold
+    resolution  the app's elbow angle against Penn Action ground truth, by
+                labelled angle. A gap in the distributions narrower than this is
+                not a boundary the pipeline can resolve
     spread      per-rep elbow at the top and at the hang, travel against body
                 scale, and trunk lean
+    arm gap     left against right elbow, labelled and as tracked, which sets
+                ARM_DISAGREEMENT_DEG
 
 Writes report/chapter5/pullup_calibration.json and .txt.
 """
@@ -20,21 +25,25 @@ from __future__ import annotations
 
 import json
 import sys
+import tempfile
 from pathlib import Path
 
+import cv2
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from backend.evaluation.metrics import angle_errors                      # noqa: E402
-from backend.evaluation.penn_action import (PENN_JOINTS, PENN_TO_MP,     # noqa: E402
+from backend.evaluation.metrics import elbow_angle_from_joints           # noqa: E402
+from backend.evaluation.penn_action import (PENN_JOINTS,                 # noqa: E402
                                             find_sequences_by_action,
                                             load_sequence)
 from backend.exercises import mechanics, pullup                          # noqa: E402
-from backend.pipeline.angles import pullup_angles_per_frame              # noqa: E402
+from backend.pipeline.angles import (ARM_DISAGREEMENT_DEG,               # noqa: E402
+                                     _arm_visibility,
+                                     pullup_angles_per_frame)
 from backend.pipeline.filter import smooth_series                        # noqa: E402
 from backend.pipeline.phase_detection import detect_bottoms, segment_reps  # noqa: E402
-from backend.pipeline.pose import extract_landmarks_from_frames          # noqa: E402
+from backend.pipeline.pose import VISIBILITY_THRESHOLD, extract_landmarks  # noqa: E402
 from backend.pipeline.runner import _smooth_landmarks                    # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -46,20 +55,28 @@ DATA = ROOT / "data" / "penn_action"
 # figures, not any angle.
 NOMINAL_FPS = 30.0
 
+# MediaPipe names the subject's own arms; Penn Action names them as seen from the
+# camera, so its "right" elbow is MediaPipe's left.
+PENN_SIDE = {"left": "right", "right": "left"}
 
-def mp_to_pixels(mp_frame, w, h):
-    """MediaPipe normalised coords to pixels, in Penn Action's joint order.
+BANDS = [(0, 30), (30, 60), (60, 90), (90, 120), (120, 150), (150, 181)]
 
-    Same mapping as the benchmark harness does. Duplicated rather than imported
-    because scripts/ is not a package and making it one to share eight lines
-    would change how every other script is run.
-    """
-    out = np.full((len(PENN_JOINTS), 2), np.nan)
-    for j, name in enumerate(PENN_JOINTS):
-        x, y = mp_frame[PENN_TO_MP[name], 0], mp_frame[PENN_TO_MP[name], 1]
-        if np.isfinite(x) and np.isfinite(y):
-            out[j] = [x * w, y * h]
-    return out
+
+def tracked(paths):
+    """Landmarks the way the app gets them, from the frames written to a
+    near-lossless video, plus the frame size."""
+    h, w = cv2.imread(str(paths[0])).shape[:2]
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+        video = Path(tmp) / "sequence.avi"
+        writer = cv2.VideoWriter(str(video), cv2.VideoWriter_fourcc(*"MJPG"), NOMINAL_FPS, (w, h))
+        writer.set(cv2.VIDEOWRITER_PROP_QUALITY, 100)
+        for p in paths:
+            frame = cv2.imread(str(p))
+            if frame.shape[:2] != (h, w):
+                frame = cv2.resize(frame, (w, h))
+            writer.write(frame)
+        writer.release()
+        return extract_landmarks(video, model="full"), w, h
 
 
 def measure(seq):
@@ -68,12 +85,12 @@ def measure(seq):
     if len(paths) < 8:
         return None
 
-    pose = extract_landmarks_from_frames(paths, model="full")
+    pose, w, h = tracked(paths)
     lm = pose["landmarks"]
-    if np.all(np.isfinite(lm[:, :, 0]), axis=1).sum() < 8:
+    if len(lm) != len(paths) or np.all(np.isfinite(lm[:, :, 0]), axis=1).sum() < 8:
         return None
 
-    ts = np.arange(len(paths), dtype=np.float64) / NOMINAL_FPS
+    ts = pose["timestamps"]
     lm_s = _smooth_landmarks(lm, ts, 1.0, 0.007)
     angles = pullup_angles_per_frame(lm_s)
 
@@ -113,25 +130,45 @@ def measure(seq):
             "frames": int(e - s + 1),
         })
 
-    # elbow-angle error against ground truth, over the same frames
-    errs = []
+    # the app's elbow angle against ground truth, and left against right
+    errors, labels, gap_labelled, gap_tracked = [], [], [], []
     for i in range(len(paths)):
-        w, h = pose["sizes"][i]
-        if w == 0:
-            continue
-        pred = mp_to_pixels(lm[i], w, h)
-        d = angle_errors(pred, seq.gt_xy(i), seq.gt_visibility(i))
-        errs.extend(v for k, v in d.items() if k.startswith("elbow"))
+        vis = seq.gt_visibility(i)
+        gt_xy = seq.gt_xy(i)
+        labelled = {}
+        for arm in ("left", "right"):
+            penn = PENN_SIDE[arm]
+            if any(vis[PENN_JOINTS.index(f"{penn}_{j}")] < 0.5
+                   for j in ("shoulder", "elbow", "wrist")):
+                continue
+            label = float(elbow_angle_from_joints(gt_xy, penn))
+            reading = angles[i][f"elbow_{arm}"]
+            if np.isfinite(label):
+                labelled[arm] = label
+                if np.isfinite(reading):
+                    errors.append(float(reading) - label)
+                    labels.append(label)
+        if len(labelled) == 2:
+            gap_labelled.append(abs(labelled["left"] - labelled["right"]))
+        a = angles[i]
+        if (np.isfinite(a["elbow_left"]) and np.isfinite(a["elbow_right"])
+                and _arm_visibility(lm_s[i], "left") >= VISIBILITY_THRESHOLD
+                and _arm_visibility(lm_s[i], "right") >= VISIBILITY_THRESHOLD):
+            gap_tracked.append(abs(a["elbow_left"] - a["elbow_right"]))
 
     return {
         "sequence": seq.seq_id,
         "frames": len(paths),
+        "frame_size": [w, h],
         "reps_detected": len(reps_all),
         "reps_kept": len(reps),
         "side": side,
         "scale": float(scale) if scale else None,
         "per_rep": per_rep,
-        "elbow_error_deg": errs,
+        "elbow_error_deg": errors,
+        "elbow_label_deg": labels,
+        "elbow_gap_labelled_deg": gap_labelled,
+        "elbow_gap_tracked_deg": gap_tracked,
     }
 
 
@@ -166,7 +203,17 @@ def main():
               f"{r['reps_detected']}->{r['reps_kept']} reps  {detail}")
 
     all_rep = [x for r in rows for x in r["per_rep"]]
-    all_err = [e for r in rows for e in r["elbow_error_deg"]]
+    errors = [e for r in rows for e in r["elbow_error_deg"]]
+    labels = [t for r in rows for t in r["elbow_label_deg"]]
+    gap_labelled = [g for r in rows for g in r["elbow_gap_labelled_deg"]]
+    gap_tracked = [g for r in rows for g in r["elbow_gap_tracked_deg"]]
+
+    bands = []
+    for lo, hi in BANDS:
+        signed = np.array([e for e, t in zip(errors, labels) if lo <= t < hi])
+        bands.append({"labelled": f"{lo}-{hi}", "n": int(signed.size),
+                      "median_signed": round(float(np.median(signed)), 1) if signed.size else None,
+                      "median_abs": round(float(np.median(np.abs(signed))), 1) if signed.size else None})
 
     summary = {
         "sequences_total": len(ids),
@@ -174,12 +221,16 @@ def main():
         "sequences_skipped": skipped,
         "reps_scored": len(all_rep),
         "clips_with_multiple_reps": sum(1 for r in rows if len(r["per_rep"]) > 1),
-        "elbow_angle_error_deg": stats(all_err),
+        "elbow_angle_error_deg": stats([abs(e) for e in errors]),
+        "elbow_error_by_labelled_angle": bands,
         "elbow_at_top": stats([x["elbow_at_top"] for x in all_rep]),
         "elbow_at_hang": stats([x["elbow_at_hang"] for x in all_rep]),
         "travel_over_scale": stats([x["travel_over_scale"] for x in all_rep]),
         "trunk_max_deg": stats([x["trunk_max"] for x in all_rep]),
         "frames_per_rep": stats([x["frames"] for x in all_rep]),
+        "elbow_gap_labelled_deg": stats(gap_labelled),
+        "elbow_gap_tracked_deg": stats(gap_tracked),
+        "tracked_frames_past_arm_guard": sum(1 for g in gap_tracked if g > ARM_DISAGREEMENT_DEG),
     }
 
     OUT.mkdir(parents=True, exist_ok=True)
@@ -187,7 +238,7 @@ def main():
         json.dumps({"summary": summary, "per_sequence": rows}, indent=2),
         encoding="utf-8")
 
-    lines = ["Pull-up threshold calibration - Penn Action subset", ""]
+    lines = ["Pull-up threshold calibration - Penn Action subset, tracked as the app does", ""]
     lines.append(f"sequences: {len(rows)} measured of {len(ids)}, "
                  f"{len(skipped)} skipped")
     lines.append(f"reps scored: {len(all_rep)}  "
@@ -199,13 +250,25 @@ def main():
     lines.append(hdr)
     lines.append("-" * len(hdr))
     for name in ("elbow_angle_error_deg", "elbow_at_top", "elbow_at_hang",
-                 "travel_over_scale", "trunk_max_deg", "frames_per_rep"):
+                 "travel_over_scale", "trunk_max_deg", "frames_per_rep",
+                 "elbow_gap_labelled_deg", "elbow_gap_tracked_deg"):
         s = summary[name]
         if not s:
             lines.append(f"{name:24s}  no data")
             continue
         lines.append(f"{name:24s} {s['n']:4d} {s['min']:7.1f} {s['p25']:7.1f} "
                      f"{s['median']:7.1f} {s['p75']:7.1f} {s['max']:7.1f}")
+    lines.append("")
+    lines.append(f"tracked frames with both arms confident and more than "
+                 f"{ARM_DISAGREEMENT_DEG:.0f} degrees apart: "
+                 f"{summary['tracked_frames_past_arm_guard']} of {len(gap_tracked)}")
+    lines.append("")
+    lines.append("elbow error by labelled angle, app minus label")
+    lines.append(f"{'labelled':10s} {'n':>5s} {'median':>8s} {'abs':>6s}")
+    for b in bands:
+        if b["n"]:
+            lines.append(f"{b['labelled']:10s} {b['n']:5d} {b['median_signed']:+8.1f} "
+                         f"{b['median_abs']:6.1f}")
     text = "\n".join(lines)
     (OUT / "pullup_calibration.txt").write_text(text + "\n", encoding="utf-8")
 
