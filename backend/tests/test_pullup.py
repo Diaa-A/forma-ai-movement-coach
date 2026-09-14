@@ -103,17 +103,12 @@ def test_only_the_pullup_merges_bottoms_without_a_return():
     assert pushup.PUSHUP.min_return == 0
 
 
-@pytest.mark.parametrize("elbow", [8.0, 14.9, 17.0, 27.4])
-def test_a_deeply_folded_elbow_is_a_measurement_not_a_glitch(elbow):
-    """8 degrees is the top of the pull on sequence 1172. The old 15-degree floor
-    rejected it and three clips lost their reps; ground truth has 206 elbow
-    readings under 30 degrees."""
+@pytest.mark.parametrize("elbow", [0.0, 1.5, 8.0, 14.9, 27.4])
+def test_a_fully_bent_elbow_is_a_measurement_not_a_glitch(elbow):
+    """Floors at 15 and then 2 degrees each threw away the top of real pulls: 8
+    degrees on sequence 1172, and under 2 across most of the top of 1173 in VIDEO
+    mode."""
     assert pullup.frame_valid({"elbow": elbow, "trunk": 5.0}, "left")
-
-
-def test_a_degenerate_zero_is_still_rejected():
-    """Coincident landmarks, not a hard pull."""
-    assert not pullup.frame_valid({"elbow": 0.0, "trunk": 5.0}, "left")
 
 
 def test_a_trunk_past_anything_a_hanging_body_does_is_not_scored():
@@ -209,9 +204,8 @@ def test_with_neither_arm_confident_the_better_seen_one_is_used():
     assert elbow == pytest.approx(30.0, abs=0.5)
 
 
-def test_which_side_was_picked_no_longer_changes_the_rep_count():
-    """On sequence 1173 the choice of arm decided whether the gate kept 2 reps
-    or 1. The side argument must not change the result now."""
+def test_which_side_was_picked_does_not_change_the_rep_count():
+    """The side argument is only there for the shared signature."""
     scale = 0.25
     travel = np.array([0.0, 0.30, 0.0, 0.30, 0.0])
     reps = [(0, 1, 2), (2, 3, 4)]
@@ -229,15 +223,16 @@ def test_which_side_was_picked_no_longer_changes_the_rep_count():
             == pullup.frame_valid(angles[1], "right"))
 
 
-def test_a_degenerate_arm_never_wins_on_visibility_alone():
-    """Sequence 1173: neither arm cleared the gate, the better-seen arm read 0
-    and the other read 4. Ranking on visibility alone lost 46 frames."""
-    elbow = pullup_angles_per_frame(_arms(4.0, 0.0, 0.28, 0.35))[0]["elbow"]
-    assert elbow == pytest.approx(4.0, abs=0.5)
+def test_two_fully_bent_arms_still_give_a_reading():
+    """The top of a pull, both forearms folded onto the upper arms."""
+    elbow = pullup_angles_per_frame(_arms(1.0, 0.5, 0.9, 0.9))[0]["elbow"]
+    assert elbow == pytest.approx(0.75, abs=0.5)
 
 
-def test_a_confident_but_degenerate_arm_is_not_averaged_in():
-    """170 averaged with a degenerate 0 would be a plausible 85 that passes every
-    gate."""
-    elbow = pullup_angles_per_frame(_arms(170.0, 0.0, 0.9, 0.9))[0]["elbow"]
-    assert elbow == pytest.approx(170.0, abs=0.5)
+def test_confident_arms_too_far_apart_give_no_reading():
+    """170 averaged with 0 would be a plausible 85 that passes every gate. Arms
+    30 degrees apart are still averaged."""
+    apart = pullup_angles_per_frame(_arms(170.0, 0.0, 0.9, 0.9))[0]["elbow"]
+    assert np.isnan(apart)
+    near = pullup_angles_per_frame(_arms(30.0, 60.0, 0.9, 0.9))[0]["elbow"]
+    assert near == pytest.approx(45.0, abs=0.5)

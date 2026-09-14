@@ -201,10 +201,12 @@ def pushup_angles_per_frame(landmarks):
     return out
 
 
-# Below this an elbow reading is coincident landmarks rather than a joint. The
-# pull-up's validity gate uses the same value, so the two-arm combination never
-# hands over a reading the gate would then reject.
-DEGENERATE_ELBOW_DEG = 2.0
+# Two arms that both clear the confidence gate but read further apart than this
+# cannot both be right. Across the Penn Action pull-ups the labelled left and
+# right elbows never differed by more than 42.9 degrees, while the tracked ones
+# did on 1.6 to 2.5% of frames where both were confidently seen. Those frames get
+# no reading rather than an average neither arm measured.
+ARM_DISAGREEMENT_DEG = 45.0
 
 
 def _arm_visibility(frame, side):
@@ -221,19 +223,18 @@ def _both_elbows(frame, elbow_l, elbow_r):
     """The pull-up's elbow angle, from both arms rather than a chosen one.
 
     From the front the arms are about equally visible, so picking one is noise.
-    An arm counts if its reading is above the degenerate floor. Of those, both are
-    averaged if both clear the confidence gate, the confident one is used if only
-    one does, and otherwise the better seen. A frame either arm would pass on its
-    own is never lost; ranking on visibility first lost 46 frames on sequence
-    1173, where the better-seen arm read 0.
+    Any finite reading counts, however small. Both arms are averaged if both clear
+    the confidence gate and agree to within ARM_DISAGREEMENT_DEG, the confident
+    one is used if only one does, and otherwise the better seen.
     """
     vis_l = _arm_visibility(frame, "left")
     vis_r = _arm_visibility(frame, "right")
-    usable = [(v, a) for a, v in ((elbow_l, vis_l), (elbow_r, vis_r))
-              if np.isfinite(a) and a >= DEGENERATE_ELBOW_DEG]
+    usable = [(v, a) for a, v in ((elbow_l, vis_l), (elbow_r, vis_r)) if np.isfinite(a)]
     if not usable:
         return float("nan")
     seen = [a for v, a in usable if v >= VISIBILITY_THRESHOLD]
+    if len(seen) == 2 and abs(seen[0] - seen[1]) > ARM_DISAGREEMENT_DEG:
+        return float("nan")
     if seen:
         return float(np.mean(seen))
     return float(max(usable)[1])

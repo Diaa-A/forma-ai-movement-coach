@@ -124,15 +124,15 @@ def test_no_reps_means_no_coverage_claim_either():
     assert ev.view_guidance is None
 
 
-def test_a_degenerate_reading_is_not_used_as_a_rep_height():
-    """The second rep's lowest reading is degenerate. Its height has to come from
-    the 36-degree frame beside it: counting the 0 would put the spread at 30 and
-    fire the cue."""
+def test_a_frame_the_validity_gate_rejects_is_not_used_as_a_rep_height():
+    """The second rep's lowest reading comes with a trunk lean no hanging body
+    makes. Its height has to come from the 36-degree frame beside it: counting the
+    0 would put the spread at 30 and fire the cue."""
     angles = [{"elbow": 170.0, "trunk": 2.0},
               {"elbow": 30.0, "trunk": 2.0},
               {"elbow": 170.0, "trunk": 2.0},
               {"elbow": 170.0, "trunk": 2.0},
-              {"elbow": 0.0, "trunk": 2.0},      # degenerate
+              {"elbow": 0.0, "trunk": 75.0},     # tracker lost the torso
               {"elbow": 36.0, "trunk": 2.0},
               {"elbow": 170.0, "trunk": 2.0}]
     ev = evaluate_pullup(angles, [(0, 1, 2), (3, 4, 6)], "left", 30.0)

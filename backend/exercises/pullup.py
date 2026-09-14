@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import numpy as np
 
-from ..pipeline.angles import DEGENERATE_ELBOW_DEG
 from . import mechanics
 from .mechanics import Movement
 
@@ -34,14 +33,6 @@ from .mechanics import Movement
 # the top across the calibration set (26 reps, p75 39.8), so most reps score zero
 # and the ones that came up short sort to the end.
 ELBOW_TARGET_TOP = 40.0
-
-# Only rejects a degenerate reading. It was 15, on the idea that an elbow cannot
-# fold that far, and it threw away the top of the pull on sequence 1172 (8
-# degrees) and with it the whole rep. Penn Action ground truth has 206 elbow
-# readings under 30 degrees and that band is the most accurate one: filmed from
-# the front, the upper arm and forearm overlap at the top, so a small projected
-# angle is correct.
-MIN_PLAUSIBLE_ELBOW = DEGENERATE_ELBOW_DEG
 
 # Past this the tracker has lost the torso; a hanging body sits near zero. Not a
 # kipping threshold -- that cue is parked.
@@ -59,21 +50,21 @@ MIN_REP_FLEXION_RATIO = 0.4
 
 # What every scoring function here reads: both arms combined, see _both_elbows in
 # angles.py. The side argument they take is part of the shared signature and does
-# not change the result. From the front the arms are about equally visible, and on
-# sequence 1173 picking one decided whether the gate kept 2 reps or 1.
+# not change the result. From the front the arms are about equally visible, so
+# choosing one by visibility is close to arbitrary.
 ELBOW_KEY = "elbow"
 
 
 def frame_valid(angle_dict, side):
     """Is this frame usable for scoring?
 
-    Not when the elbow reading is degenerate, or when the trunk leans further than
-    a hanging body does, which means the tracker has lost the torso.
+    Not when there is no elbow reading, or when the trunk leans further than a
+    hanging body does, which means the tracker has lost the torso. A reading near
+    0 counts: at the top of a pull the forearm folds onto the upper arm in the
+    image.
     """
     elbow = angle_dict.get(ELBOW_KEY)
     if elbow is None or not np.isfinite(elbow):
-        return False
-    if elbow < MIN_PLAUSIBLE_ELBOW:
         return False
     trunk = angle_dict.get("trunk")
     if (trunk is not None and np.isfinite(trunk)
