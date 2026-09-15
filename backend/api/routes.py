@@ -20,7 +20,7 @@ from fastapi.responses import JSONResponse
 
 from ..pipeline.probe import probe_clip
 from ..pipeline.runner import run_pipeline, new_job_id, RunOptions, RunResult
-from ..exercises.registry import PROFILES, exercise_ids
+from ..exercises.registry import PROFILES, exercise_ids, get_spec
 from . import retention
 from .schemas import (AnalyzeResponse, KeyFrame, RepStat, CoachingReportOut,
                       ExerciseOut, ExercisesResponse, LimitsOut)
@@ -374,13 +374,18 @@ def _build_response(result: RunResult, exercise_type: str) -> AnalyzeResponse:
         report_out = CoachingReportOut(**cpayload["report"])
         transcript = cpayload.get("voice_transcript") or None
 
+    # angles.json keeps the runner's pick, which the overlay and captions still use;
+    # an exercise scored on both arms has no single side to report
+    spec = get_spec(exercise_type)
+    side = "both" if spec is not None and spec.scores_both_sides else angles_payload["side"]
+
     return AnalyzeResponse(
         job_id=result.job_id,
         exercise_type=exercise_type,
         status=angles_payload.get("status", "ok"),
         fps=angles_payload["fps"],
         frame_count=angles_payload["frame_count"],
-        side=angles_payload["side"],
+        side=side,
         annotated_video_url=f"{base}/{result.annotated_video_path.name}",
         angles_url=f"{base}/angles.json",
         key_frames=key_frames,

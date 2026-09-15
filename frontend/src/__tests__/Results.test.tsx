@@ -50,6 +50,16 @@ describe('a clip that analysed cleanly', () => {
     expect(stats).toHaveTextContent('left')
   })
 
+  it('names both arms for an exercise scored on both', () => {
+    // the pull-up is filmed front-on and scores the two arms together, so a chip
+    // naming one side would contradict the coaching under it
+    show({ ...okResult, exercise_type: 'pullup', side: 'both' })
+    const stats = document.querySelector('.stats')
+    expect(stats).toHaveTextContent('both')
+    expect(stats).toHaveTextContent('arms analysed')
+    expect(stats).not.toHaveTextContent('side analysed')
+  })
+
   it('reports flagged or clean from the same flag the key frame uses', () => {
     // the strip must not disagree with the caption beside it: both read
     // key_frames.worst.highlighted, and okResult has no flagged worst frame

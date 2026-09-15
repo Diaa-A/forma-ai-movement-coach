@@ -103,7 +103,7 @@ class AnalyzeResponse(BaseModel):
     status: str               # "ok" | "no_reps" | "low_detection" | "rotated"
     fps: float
     frame_count: int
-    side: str
+    side: str                 # "left" | "right", or "both" for the pull-up
     annotated_video_url: str
     angles_url: str
     key_frames: List[KeyFrame]

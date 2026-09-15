@@ -40,6 +40,9 @@ class ExerciseSpec:
     # Both current exercises use the hips, which is a finding rather than a
     # coincidence -- see the note in the work-package documentation.
     travel_landmarks: tuple = ("left_hip", "right_hip")
+    # scored on both arms together rather than on the better-seen side, so the API
+    # reports "both" instead of the side the runner picked for drawing
+    scores_both_sides: bool = False
 
 
 EXERCISES: Dict[str, ExerciseSpec] = {
@@ -66,6 +69,7 @@ EXERCISES: Dict[str, ExerciseSpec] = {
         evaluate=evaluate_pullup,
         flag_frames=pullup.flag_frames,
         caption=pullup.frame_caption,
+        scores_both_sides=True,
     ),
 }
 

@@ -97,7 +97,7 @@ export default function Results({ result, feedbackFormUrl, onRestart }: Props) {
           </li>
           <li className="stat">
             <strong>{result.side}</strong>
-            <span>side analysed</span>
+            <span>{result.side === 'both' ? 'arms analysed' : 'side analysed'}</span>
           </li>
           <li className={`stat ${worst?.highlighted ? 'stat-flagged' : 'stat-clean'}`}>
             <strong>{worst?.highlighted ? 'Flagged' : 'Clean'}</strong>

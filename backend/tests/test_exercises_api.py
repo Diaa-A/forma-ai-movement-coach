@@ -113,3 +113,27 @@ def test_the_feedback_form_url_is_served_verbatim(monkeypatch):
     monkeypatch.setenv("FEEDBACK_FORM_URL", url)
     r = client.get("/exercises")
     assert r.json()["feedback_form_url"] == url
+
+
+def test_a_pullup_response_says_both_arms_not_the_side_the_runner_picked(tmp_path):
+    """The pull-up scores both arms, but angles.json still records the side the
+    runner picked for drawing, and the results screen showed that: a front-on
+    pull-up read "left side analysed" above coaching about both arms."""
+    import json
+
+    from backend.api.routes import _build_response
+    from backend.pipeline.runner import RunResult
+
+    angles = tmp_path / "angles.json"
+    angles.write_text(json.dumps({"status": "ok", "fps": 30.0, "frame_count": 90,
+                                  "side": "left"}))
+
+    def result():
+        return RunResult(job_id="job", output_dir=tmp_path, angles_path=angles,
+                         annotated_video_path=tmp_path / "annotated.mp4",
+                         worst_frame_path=None, best_frame_path=None,
+                         coaching_path=None, summary={"reps": []})
+
+    assert _build_response(result(), "pullup").side == "both"
+    assert _build_response(result(), "squat").side == "left"
+    assert _build_response(result(), "pushup").side == "left"
