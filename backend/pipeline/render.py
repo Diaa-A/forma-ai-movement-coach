@@ -231,8 +231,12 @@ def save_key_frame(input_path, frame_idx, landmarks_frame, angle_frame,
     if caption is not None:
         info_lines.extend(caption(angle_frame, side))
     info_text = "\n".join(s for s in info_lines if s)
-    draw_overlay(frame, landmarks_frame, flagged_joints, info_text=info_text)
-    cv2.imwrite(str(output_path), frame)
+    # draw on a copy: when the worst and best frames are the same index the caller
+    # hands both calls one decoded frame, and drawing in place stacked the second
+    # label on top of the first
+    canvas = frame.copy()
+    draw_overlay(canvas, landmarks_frame, flagged_joints, info_text=info_text)
+    cv2.imwrite(str(output_path), canvas)
     return output_path
 
 

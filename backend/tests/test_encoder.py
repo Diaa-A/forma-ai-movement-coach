@@ -167,6 +167,23 @@ def test_read_frames_exact_handles_nothing_to_read(tmp_path):
     assert read_frames_exact(tmp_path / "nope.mp4", [None]) == {}
 
 
+def test_saving_a_key_frame_leaves_the_decoded_frame_untouched(tmp_path):
+    """A one-rep set has the same worst and best frame, and the runner decodes it
+    once for both saves. Drawing in place meant best.jpg carried both labels, one
+    printed over the other."""
+    from backend.pipeline.render import save_key_frame
+
+    frame = np.full((120, 160, 3), 40, dtype=np.uint8)
+    before = frame.copy()
+    landmarks = np.zeros((33, 4))
+    save_key_frame(None, 5, landmarks, {}, tmp_path / "worst.jpg",
+                   label="closest to the limit", frame=frame)
+    assert np.array_equal(frame, before)
+    save_key_frame(None, 5, landmarks, {}, tmp_path / "best.jpg", label="best", frame=frame)
+    assert np.array_equal(frame, before)
+    assert cv2.imread(str(tmp_path / "best.jpg")) is not None
+
+
 # ---------------------------------------------------------------------------
 # Overlay geometry scales with the frame (render._scale)
 # ---------------------------------------------------------------------------
