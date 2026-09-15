@@ -302,6 +302,7 @@ def run_pipeline(input_path, output_root, exercise: str = "squat",
                 evaluation, voice_transcript=voice_text,
                 model=options.llm_model,
                 force_dry_run=options.force_dry_run_coach,
+                profile=spec.profile,
             )
             payload = {
                 "status": status,

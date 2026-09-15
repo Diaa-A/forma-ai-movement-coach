@@ -27,6 +27,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import urllib.request
 import urllib.error
 from dataclasses import dataclass, asdict
@@ -426,10 +427,17 @@ def not_analyzed_report(status: str, profile=None) -> CoachingReport:
     )
 
 
+def _mentions_any(text: str, words) -> bool:
+    """Whole words or phrases, ignoring case, so "bar" does not match "barely"."""
+    lowered = text.lower()
+    return any(re.search(r"\b" + re.escape(w.lower()) + r"\b", lowered) for w in words)
+
+
 def generate_coaching_report(evaluation: Evaluation,
                              voice_transcript: str = "",
                              model: Optional[str] = None,
-                             force_dry_run: bool = False) -> CoachingReport:
+                             force_dry_run: bool = False,
+                             profile=None) -> CoachingReport:
     """Top-level coaching call.
 
     Falls back to a deterministic dry-run report when:
@@ -439,6 +447,10 @@ def generate_coaching_report(evaluation: Evaluation,
           in `source` as "dry_run_fallback", which the UI turns into a sentence
           telling the user they are reading the system's own wording — so it is
           not silent, and no exception text reaches them.
+
+    `profile` is the exercise's ExerciseProfile. With it, a next-session line that
+    gives advice on something the profile lists as not assessed is replaced by the
+    dry-run report's line, and the rest of the model's wording is kept.
     """
     # None means "whatever the environment says", resolved now rather than when
     # this module was imported -- see active_model.
@@ -457,6 +469,14 @@ def generate_coaching_report(evaluation: Evaluation,
     try:
         raw = _call_groq(SYSTEM_PROMPT, user_prompt, model, api_key)
         fields = _validate(_parse_llm_response(raw))
+        # A live pull-up report said it could not tell whether the chin cleared the
+        # bar or the arms straightened, then ended "make sure you fully extend your
+        # arms and clear the bar". The prompt stays as it is, so the line the user
+        # is most likely to act on is checked here instead of trusted.
+        if profile is not None and _mentions_any(fields["next_session_focus"],
+                                                 profile.not_assessed_words):
+            log.info("next-session line named something not assessed; using the fixed line")
+            fields["next_session_focus"] = _dry_run_report(evaluation).next_session_focus
         return CoachingReport(
             **fields,
             source="llm",

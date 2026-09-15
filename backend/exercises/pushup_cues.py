@@ -177,6 +177,12 @@ PUSHUP_PROFILE = ExerciseProfile(
                       # the model's own words would score the invented claim
                       # faithful without the model changing at all.
                       "whether the elbows fully straighten at the top"],
+    # "head" on its own is left out: the sagging-hips fix says "one plank from head
+    # to heels", which is about the hips.
+    not_assessed_words=["flare", "flaring", "tuck", "tucked", "elbows in", "elbows out",
+                        "45 degrees", "neck", "chin", "gaze", "head position",
+                        "head in line", "straighten", "lock out", "lockout",
+                        "extend", "extension"],
 )
 
 

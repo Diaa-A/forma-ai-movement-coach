@@ -144,6 +144,9 @@ SQUAT_PROFILE = ExerciseProfile(
     # is legible, kept out of the covered lists so no view claims to assess them.
     not_yet_assessed=["knee tracking (whether the knees cave inward)",
                       "whether the heels stay down"],
+    not_assessed_words=["cave", "caves", "caving", "valgus", "knees in", "knees inward",
+                        "knees out", "knees outward", "in line with the toes",
+                        "heel", "heels"],
 )
 
 # Which anatomical plane each cue lives in — a cue is only meaningful from a view

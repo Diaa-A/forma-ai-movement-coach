@@ -38,6 +38,10 @@ class ExerciseProfile:
     # staying silent about it, and arguably a worse one, because the user reads
     # coverage as a clean bill of health. They get named separately instead.
     not_yet_assessed: List[str] = field(default_factory=list)
+    # Words that mean advice about something in not_yet_assessed. The coaching
+    # layer does not let the next-session line use them, because the report has
+    # just told the user that part was not checked.
+    not_assessed_words: List[str] = field(default_factory=list)
 
     def assessments(self, plane: str) -> List[str]:
         return self.plane_assessments.get(plane, [])

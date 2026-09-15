@@ -5,6 +5,8 @@ is about the quality of the coaching — they are about the report the user read
 when the system could not do its job, which is where wording matters most because
 there is no analysis for it to be checked against.
 """
+import json
+
 import pytest
 
 from backend.exercises.mechanics import Evaluation
@@ -23,6 +25,49 @@ def an_evaluation(exercise="squat"):
         positives=["you completed the set"],
         notes=["average knee angle at the bottom: 88°"],
     )
+
+
+# ---------------------------------------------------------------------------
+# advice about something the system did not check
+# ---------------------------------------------------------------------------
+
+def the_model_replies(monkeypatch, next_session_focus):
+    monkeypatch.setenv("GROQ_API_KEY", "not-a-real-key")
+    reply = {
+        "what_went_well": ["every rep came up to about the same height"],
+        "primary_issue": "No primary fault was detected in this set.",
+        "secondary_issues": [],
+        "corrective_cues": [],
+        "next_session_focus": next_session_focus,
+        "answer_to_question": "The system could not tell whether your chin cleared the bar.",
+    }
+    monkeypatch.setattr(coaching, "_call_groq", lambda *a, **k: {
+        "choices": [{"message": {"content": json.dumps(reply)}}]})
+
+
+@pytest.mark.parametrize("exercise,profile,line", [
+    ("pullup", PULLUP_PROFILE, "Keep the consistent rep height and make sure you fully "
+                               "extend your arms and clear the bar on each pull-up."),
+    ("pushup", PUSHUP_PROFILE, "Keep your elbows tucked at about 45 degrees on every rep."),
+    ("squat", SQUAT_PROFILE, "Keep your heels down and your knees out as you stand up."),
+])
+def test_the_next_session_line_may_not_advise_on_what_was_not_assessed(
+        monkeypatch, exercise, profile, line):
+    """The pull-up line is the one a live report ended with, straight after saying
+    it could not see the chin or the arms."""
+    the_model_replies(monkeypatch, line)
+    report = coaching.generate_coaching_report(an_evaluation(exercise), profile=profile)
+    assert report.next_session_focus == \
+        coaching._dry_run_report(an_evaluation(exercise)).next_session_focus
+    assert report.source == "llm"
+    # saying what was not measured is still allowed, in the answer
+    assert "chin" in report.answer_to_question
+
+
+def test_a_next_session_line_about_what_was_measured_is_kept(monkeypatch):
+    the_model_replies(monkeypatch, "Keep every rep at the same height, even on the last few.")
+    report = coaching.generate_coaching_report(an_evaluation("pullup"), profile=PULLUP_PROFILE)
+    assert report.next_session_focus == "Keep every rep at the same height, even on the last few."
 
 
 # ---------------------------------------------------------------------------

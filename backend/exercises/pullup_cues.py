@@ -120,6 +120,13 @@ PULLUP_PROFILE = ExerciseProfile(
                       "grip width",
                       "how evenly your two arms pull",
                       "how fast you lower"],
+    # "lower" on its own is left out: the one live cue is about reps that finish
+    # lower than others.
+    not_assessed_words=["chin", "bar", "straighten", "extend", "extension", "lock out",
+                        "lockout", "full hang", "dead hang", "swing", "swinging", "kip",
+                        "kipping", "momentum", "grip", "hands", "shoulder-width",
+                        "evenly", "both arms", "one arm", "lowering", "descent",
+                        "tempo", "slowly", "control"],
 )
 
 
