@@ -169,6 +169,7 @@ def run_pipeline(input_path, output_root, exercise: str = "squat",
     side = mechanics.pick_side(movement, lm_smooth, reps_all)
     reps = mechanics.keep_real_reps(movement, reps_all, hip_y_smooth, scale,
                                     angles_per_frame=angles, side=side, fps=fps)
+    reps = mechanics.merge_reps_without_reopening(movement, reps, angles, side, fps)
     phases = label_phases(reps, n_frames)
     scores = mechanics.score_reps(movement, angles, reps, side, fps)
     worst_idx = mechanics.worst_frame(movement, angles, reps, side, fps)

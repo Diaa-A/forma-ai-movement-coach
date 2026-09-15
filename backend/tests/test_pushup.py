@@ -382,3 +382,40 @@ def test_parked_cues_are_declared_and_not_claimed_as_covered():
             assert keywords[flag] in declared, f"{flag} is parked and undeclared"
             assert keywords[flag] not in covered, \
                 f"{flag} is parked but claimed as covered"
+
+
+# ---------------------------------------------------------------------------
+# one push-up split in two
+# ---------------------------------------------------------------------------
+
+def _two_bottoms(elbow_between):
+    """Bottoms of 85 and 86 degrees at frames 15 and 45, with the elbow at
+    `elbow_between` on the other frames from 8 to 52."""
+    angles = [_frame(elbow=170.0) for _ in range(61)]
+    for i in range(8, 53):
+        angles[i] = _frame(elbow=elbow_between)
+    angles[15] = _frame(elbow=85.0)
+    angles[45] = _frame(elbow=86.0)
+    return angles, [(0, 15, 30), (30, 45, 60)]
+
+
+def test_a_pushup_whose_elbow_never_reopens_counts_once():
+    """The elbow opens 4 degrees between the two bottoms, so they are one rep, kept at
+    the deeper one."""
+    angles, reps = _two_bottoms(elbow_between=90.0)
+    assert mechanics.merge_reps_without_reopening(pushup.PUSHUP, reps, angles, "left", 30.0) \
+        == [(0, 15, 60)]
+
+
+def test_pushups_with_the_arms_straightening_between_them_stay_two():
+    angles, reps = _two_bottoms(elbow_between=160.0)
+    assert mechanics.merge_reps_without_reopening(pushup.PUSHUP, reps, angles, "left", 30.0) \
+        == reps
+
+
+def test_only_the_pushup_merges_reps_on_the_elbow():
+    """Guard: the limit was measured on push-up clips only."""
+    from backend.exercises.pullup import PULLUP
+    assert pushup.PUSHUP.min_reopen > 0
+    assert squat.SQUAT.min_reopen == 0
+    assert PULLUP.min_reopen == 0

@@ -93,6 +93,10 @@ class Movement:
     # scale, before the second counts as another rep. 0 keeps every bottom the
     # detector finds. See merge_bottoms_without_return.
     min_return: float = 0.0
+    # Degrees the primary joint has to open again between two neighbouring reps
+    # before they count as two. 0 keeps every rep the gates kept. See
+    # merge_reps_without_reopening.
+    min_reopen: float = 0.0
     # How much of a rep's window has to survive the per-frame validity gate for
     # the rep to be scoreable at all. See _windows_mostly_valid.
     min_valid_fraction: float = 0.6
@@ -303,6 +307,42 @@ def merge_bottoms_without_return(movement: Movement, bottoms, travel_y, scale):
         elif np.isfinite(y[b]) and (not np.isfinite(y[a]) or y[b] > y[a]):
             kept[-1] = b
     return kept
+
+
+def merge_reps_without_reopening(movement: Movement, reps, angles_per_frame, side, fps=30.0):
+    """Count two neighbouring reps as one when the joint never opened between them.
+
+    detect_bottoms can mark two turns inside a single push-up, and hip travel cannot
+    separate them because a push-up's hips barely move between reps. The elbow can.
+    With `min_reopen` set, a rep joins the one before it unless the joint opens by
+    at least that many degrees between their deepest frames, and the joined rep
+    keeps the deeper bottom.
+    """
+    if movement.min_reopen <= 0 or angles_per_frame is None or len(reps) < 2:
+        return list(reps)
+    key = movement.primary_angle(side)
+
+    def deepest(rep):
+        lo, hi = eval_window(movement, rep[0], rep[1], rep[2], fps)
+        return deepest_frame(movement, angles_per_frame, lo, hi, side)
+
+    merged = [tuple(reps[0])]
+    for rep in reps[1:]:
+        prev = merged[-1]
+        f1, f2 = deepest(prev), deepest(rep)
+        if prev[2] != rep[0] or f1 is None or f2 is None:
+            merged.append(tuple(rep))
+            continue
+        lo, hi = sorted((f1, f2))
+        between = [angles_per_frame[i].get(key) for i in range(lo, hi + 1)
+                   if movement.is_valid(angles_per_frame[i], side)]
+        between = [float(v) for v in between if v is not None and np.isfinite(v)]
+        a1, a2 = float(angles_per_frame[f1][key]), float(angles_per_frame[f2][key])
+        if between and max(between) - max(a1, a2) < movement.min_reopen:
+            merged[-1] = (prev[0], prev[1] if a1 <= a2 else rep[1], rep[2])
+        else:
+            merged.append(tuple(rep))
+    return merged
 
 
 def _windows_mostly_valid(movement: Movement, reps, angles_per_frame, side):

@@ -83,6 +83,10 @@ TRAVEL_ABS_FLOOR = 0.10
 TRAVEL_REL_FLOOR = 0.30
 MIN_REP_ELBOW_FLEXION = 30.0
 MIN_REP_FLEXION_RATIO = 0.4
+# How far the elbow has to open again between two reps for them to be two. On four
+# stock clips one push-up was counted twice, and the elbow opened 0 to 11.8 degrees
+# between the halves; on the clips that analyse, separate reps opened 25.5 or more.
+MIN_ELBOW_REOPEN = 15.0
 
 
 def _elbow_key(side):
@@ -197,6 +201,7 @@ PUSHUP = Movement(
     use_travel_gate=False,
     min_flexion=MIN_REP_ELBOW_FLEXION,
     flexion_rel_floor=MIN_REP_FLEXION_RATIO,
+    min_reopen=MIN_ELBOW_REOPEN,
 )
 
 
