@@ -105,6 +105,23 @@ def test_controlled_tempo_positive():
     assert any("controlled" in p for p in ev.positives)
 
 
+def test_hips_rising_before_the_knees_fires_hip_rise_first():
+    """Halfway up the knee is nearly straight while the trunk still has 25 degrees
+    to come back. When the knee is still opening, it does not fire."""
+    phases = ["ascent"] * 31
+    hips_first = _clip()
+    hips_first[22] = _frame(knee_l=150.0, spine=50.0)   # (15 + 30) // 2, the ascent midpoint
+    hips_first[30] = _frame(knee_l=160.0, spine=25.0)
+    together = _clip()
+    together[22] = _frame(knee_l=120.0, spine=35.0)
+    together[30] = _frame(knee_l=165.0, spine=25.0)
+
+    assert "hip_rise_first" in _flags(
+        evaluate_squat(hips_first, REPS, "left", FPS, phase_per_frame=phases))
+    assert "hip_rise_first" not in _flags(
+        evaluate_squat(together, REPS, "left", FPS, phase_per_frame=phases))
+
+
 def test_no_reps_yields_nothing():
     ev = evaluate_squat(_clip(), [], "left", FPS)
     assert ev.rep_count == 0

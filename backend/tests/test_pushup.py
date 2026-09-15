@@ -144,6 +144,41 @@ def test_symmetry_is_withheld_without_landmarks_to_check_it():
     assert not any("both arms" in p for p in ev.positives)
 
 
+def test_uneven_arms_fire_elbow_asymmetry_once_the_far_arm_is_seen():
+    """The other half of the gate above: with every landmark confident, arms 40
+    degrees apart at the bottom fire the cue and even arms earn the positive."""
+    landmarks = np.zeros((180, 33, 4))
+    landmarks[:, :, 3] = 0.95
+    even, reps = _set_of_reps(3, elbow=85.0, body=3.0)
+    uneven = [dict(f) for f in even]
+    for _, bottom, _ in reps:
+        uneven[bottom]["elbow_right"] = 125.0
+
+    ev_uneven = evaluate_pushup(uneven, reps, "left", 30.0, landmarks=landmarks)
+    ev_even = evaluate_pushup(even, reps, "left", 30.0, landmarks=landmarks)
+    assert "elbow_asymmetry" in [c.flag for c in ev_uneven.cues_fired]
+    assert "elbow_asymmetry" not in [c.flag for c in ev_even.cues_fired]
+    assert any("both arms" in p for p in ev_even.positives)
+
+
+def test_reps_that_bottom_out_at_different_depths_fire_rep_inconsistency():
+    even, reps = _set_of_reps(3, elbow=85.0, body=3.0)
+    uneven = [dict(f) for f in even]
+    uneven[reps[2][1]] = _frame(elbow=115.0, body=3.0)   # the last rep stops 30 degrees higher
+
+    assert "rep_inconsistency" in [c.flag for c in evaluate_pushup(uneven, reps, "left", 30.0).cues_fired]
+    assert "rep_inconsistency" not in [c.flag for c in evaluate_pushup(even, reps, "left", 30.0).cues_fired]
+
+
+def test_dropping_into_the_bottom_fires_fast_descent():
+    """A third of a second on the way down fires; a full second does not."""
+    quick, quick_reps = _set_of_reps(3, elbow=85.0, body=3.0, frames_per_rep=20)
+    slow, slow_reps = _set_of_reps(3, elbow=85.0, body=3.0)
+
+    assert "fast_descent" in [c.flag for c in evaluate_pushup(quick, quick_reps, "left", 30.0).cues_fired]
+    assert "fast_descent" not in [c.flag for c in evaluate_pushup(slow, slow_reps, "left", 30.0).cues_fired]
+
+
 def test_parked_cue_never_fires():
     """head_dropped is defined but its detector is not trustworthy -- the nose is
     the only head landmark tracked and it moves with rotation as well as with the
