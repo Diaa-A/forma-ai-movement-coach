@@ -23,6 +23,9 @@ import urllib.request
 from pathlib import Path
 
 PEXELS_SEARCH = "https://api.pexels.com/videos/search"
+# A phone uploads about this many pixels across its short edge, and analysis caps the
+# long edge at 1920, so a fixture at 1080 is the same input a real user would send.
+SHORT_EDGE = 1080
 
 
 def _load_dotenv(path=".env"):
@@ -52,20 +55,22 @@ def _search(api_key, query, per_page, orientation=None):
 
 
 def _pick_file(video):
-    """Pick the medium-quality mp4 from a Pexels video's file list.
+    """Pick the mp4 nearest what a phone uploads, measured on the short edge.
 
-    Their API returns multiple sizes per video. We want something modest — 720p
-    HD or similar — to keep clips small while still giving MediaPipe enough
-    resolution.
+    This used to rank on height alone. A portrait clip lists its long edge as the
+    height, so 640-tall files won and those clips arrived 360 px wide: twelve
+    fixtures came down that way, and at full size one pull-up clip counted a rep
+    fewer and one push-up clip stopped being analysable at all. A fixture smaller
+    than the upload it stands in for measures the wrong thing.
     """
     files = video.get("video_files", [])
-    # prefer h.264 mp4, height around 720, then fallback
-    mp4s = [f for f in files if f.get("file_type") == "video/mp4"]
+    mp4s = [f for f in files if f.get("file_type") == "video/mp4"
+            and f.get("width") and f.get("height")]
     if not mp4s:
         return None
-    # ranked: closest height to 720, then lower bitrate
-    mp4s.sort(key=lambda f: (abs((f.get("height") or 0) - 720),
-                              f.get("width") or 0))
+    # short edge nearest a phone's, then the smaller file of two equally close
+    mp4s.sort(key=lambda f: (abs(min(f["width"], f["height"]) - SHORT_EDGE),
+                             f["width"] * f["height"]))
     return mp4s[0]
 
 
