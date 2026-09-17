@@ -53,6 +53,23 @@ def test_a_spread_just_under_the_tolerance_says_nothing():
     assert not ev.cues_fired
 
 
+def test_a_frame_outside_the_evaluation_window_is_not_read_as_a_rep_height():
+    """A real set read 47 degrees of spread against 18 because the last rep's span
+    ran to the end of the clip, where letting go of the bar reads as a bent elbow."""
+    angles, reps = [], []
+    for n, top in enumerate([70.0, 72.0, 68.0]):
+        base = n * 60
+        angles += [{"elbow": 170.0, "trunk": 2.0} for _ in range(60)]
+        angles[base + 30] = {"elbow": top, "trunk": 2.0}
+        reps.append((base, base + 30, base + 59))
+    angles[reps[-1][2]] = {"elbow": 20.0, "trunk": 2.0}
+
+    ev = evaluate_pullup(angles, reps, "left", 30.0)
+
+    assert not ev.cues_fired
+    assert any("70" in n or "average elbow" in n for n in ev.notes)
+
+
 def test_a_single_rep_is_not_judged_for_consistency():
     """One rep has nothing to be consistent with."""
     angles, reps = _set([65.0])

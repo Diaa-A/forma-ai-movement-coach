@@ -19,7 +19,7 @@ from typing import List
 import numpy as np
 
 from .base import ExerciseProfile, FRONTAL, SAGITTAL, coverage_guidance
-from .mechanics import CueHit, Evaluation
+from .mechanics import CueHit, Evaluation, eval_window
 from . import pullup
 
 
@@ -169,8 +169,14 @@ def evaluate_pullup(angles_per_frame, reps, side, fps, phase_per_frame=None,
     tops = []
 
     for (s, b, e) in reps:
-        f = pullup.deepest_frame(angles_per_frame, max(s, 0),
-                                 min(e, len(angles_per_frame) - 1), side)
+        # The window around the turning point, not the whole rep. Depth and the key
+        # frames have always read it this way. Scanning the span let the last rep,
+        # whose span runs to the end of the clip, take its angle from the moment of
+        # dropping off the bar, which reads as a deeply bent elbow and made even sets
+        # look inconsistent.
+        lo, hi = eval_window(pullup.PULLUP, s, b,
+                             min(e, len(angles_per_frame) - 1), fps)
+        f = pullup.deepest_frame(angles_per_frame, max(lo, 0), hi, side)
         if f is None:
             continue
         angle = angles_per_frame[f].get(key)
