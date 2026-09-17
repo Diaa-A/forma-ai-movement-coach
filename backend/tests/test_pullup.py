@@ -95,6 +95,16 @@ def test_lowering_between_two_pulls_still_counts_two():
     assert mechanics.merge_bottoms_without_return(pullup.PULLUP, bottoms, y, 1.0) == bottoms
 
 
+def test_reps_that_stop_short_of_a_full_hang_still_count_separately():
+    """A set can stay high between pulls and still be two reps. On a filmed set whose
+    chin cleared the bar every time, coming down only part way, the older return rule
+    merged four of the five away."""
+    y = _two_tops(dip=0.25)
+    bottoms = detect_bottoms(y, min_separation=5)
+    assert len(bottoms) == 2
+    assert mechanics.merge_bottoms_without_return(pullup.PULLUP, bottoms, y, 1.0) == bottoms
+
+
 def test_only_the_pullup_merges_bottoms_without_a_return():
     """Guard: on the push-up clips the rule merged real reps, because the hips
     barely move between them."""

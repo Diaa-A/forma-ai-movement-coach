@@ -42,9 +42,16 @@ MAX_PLAUSIBLE_TRUNK_LEAN = 60.0
 # with bent or crossed knees. Against the torso a rep travels 0.4 to 1.3 (median
 # 0.8), so the shared ceiling of 1.0 would drop real reps; 2.5 still catches
 # someone walking out of frame.
+#
+# The floors are low because a set that does not come all the way back down between
+# reps travels little, and those are still reps: on a set filmed to order whose chin
+# cleared the bar every time but which stopped short on the way down, floors of
+# 0.30 and 0.35 counted one rep of five. Across 25 clips counted by eye they cost
+# four more counts and gained none. What keeps a hang or a reach for the bar out is
+# the flexion floor below, not travel.
 MAX_PLAUSIBLE_TRAVEL = 2.5
-TRAVEL_ABS_FLOOR = 0.30
-TRAVEL_REL_FLOOR = 0.35
+TRAVEL_ABS_FLOOR = 0.15
+TRAVEL_REL_FLOOR = 0.20
 MIN_REP_ELBOW_FLEXION = 30.0
 MIN_REP_FLEXION_RATIO = 0.4
 
