@@ -368,6 +368,22 @@ def test_a_rep_with_a_few_bad_frames_survives():
     assert len(kept) == 1
 
 
+def test_a_rep_at_the_end_is_judged_with_the_frames_after_it():
+    """The reference push-up clip's fourteenth "rep" is the dip on the way to standing
+    up: 100% valid inside its own window and 44% once getting up is counted with it. The
+    window a rep is measured in stops at the rhythm of the set; this gate still looks to
+    the end of the clip, which is the only thing telling the two apart."""
+    from backend.exercises import mechanics
+    from backend.exercises.pushup import PUSHUP
+
+    angles = _window(80, 0) + _window(0, 90)
+    kept = mechanics.keep_real_reps(PUSHUP, [(0, 20, 39), (40, 60, 79)], travel_y=None,
+                                    scale=1.0, angles_per_frame=angles, side="left",
+                                    fps=30.0)
+
+    assert kept == [(0, 20, 39)]
+
+
 def test_parked_cues_are_declared_and_not_claimed_as_covered():
     """Holds the coverage contract for the push-up the way the squat and pull-up
     suites already do."""

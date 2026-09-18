@@ -42,6 +42,17 @@ def test_segment_reps_tiles_the_clip():
     assert reps == [(0, 15, 30), (30, 45, 60), (60, 75, 89)]
 
 
+def test_the_last_rep_does_not_run_to_the_end_of_the_clip():
+    """Recording keeps going while the lifter drops off the bar and walks back to the
+    phone. Bounded by the set's own rhythm, the last rep stops where the next one would
+    have started: on a real pull-up set the unbounded version measured 4.2 body lengths
+    of travel and was thrown out as impossible."""
+    reps = segment_reps([100, 160, 220], n_frames=600)
+
+    assert reps[-1] == (190, 220, 250)
+    assert reps[0] == (70, 100, 130)
+
+
 def test_label_phases_ordering_within_a_rep():
     phases = label_phases([(0, 15, 30)], n_frames=31)
     assert phases[5] == PHASE_DESCENT

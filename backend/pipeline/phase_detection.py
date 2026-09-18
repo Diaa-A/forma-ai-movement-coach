@@ -45,17 +45,26 @@ def detect_bottoms(hip_y_smoothed, min_separation=5):
 def segment_reps(bottoms, n_frames):
     """Wrap each bottom in a (descent_start, bottom, ascent_end) tuple.
 
-    Boundaries: half-way to the neighbouring bottom on each side, clamped to the
-    video. Good enough for Phase A; Phase B can tighten this once we have proper
-    rep counting.
+    Boundaries are half-way to the neighbouring bottom on each side. The first and
+    last rep have a neighbour on one side only, and running them out to the edges of
+    the video puts the approach and the walk back to the phone inside a rep: a real
+    pull-up set lost its fifth rep that way, because dropping off the bar afterwards
+    measured 4.2 body lengths of travel and failed the plausibility ceiling. With one
+    neighbour, the gap to it is mirrored, so the end rep gets the same width as the
+    rhythm around it. With no neighbour at all there is nothing to mirror and the
+    clip's edges are all there is.
     """
     reps = []
     for i, b in enumerate(bottoms):
-        prev_b = bottoms[i - 1] if i > 0 else 0
-        next_b = bottoms[i + 1] if i + 1 < len(bottoms) else n_frames - 1
-        start = (prev_b + b) // 2 if i > 0 else 0
-        end   = (b + next_b) // 2 if i + 1 < len(bottoms) else n_frames - 1
-        reps.append((int(start), int(b), int(end)))
+        prev_b = bottoms[i - 1] if i > 0 else None
+        next_b = bottoms[i + 1] if i + 1 < len(bottoms) else None
+        if prev_b is None and next_b is not None:
+            prev_b = b - (next_b - b)
+        if next_b is None and prev_b is not None:
+            next_b = b + (b - prev_b)
+        start = (prev_b + b) // 2 if prev_b is not None else 0
+        end = (b + next_b) // 2 if next_b is not None else n_frames - 1
+        reps.append((int(max(0, start)), int(b), int(min(n_frames - 1, end))))
     return reps
 
 

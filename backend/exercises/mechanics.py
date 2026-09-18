@@ -369,9 +369,20 @@ def _windows_mostly_valid(movement: Movement, reps, angles_per_frame, side):
     if angles_per_frame is None:
         return list(reps)
 
+    # The first and last rep are judged against the edges of the clip, not against the
+    # window they are measured in. segment_reps bounds those two by the rhythm of the set
+    # so that walking away does not land inside a rep being measured; this gate asks the
+    # opposite question, and needs those frames. On the reference push-up clip the
+    # fourteenth "rep" is the dip on the way to standing up: 100% valid in its own window,
+    # 44% once the getting up is counted with it.
+    last = len(reps) - 1
+    n_frames = len(angles_per_frame)
+
     kept = []
-    for (s, b, e) in reps:
-        window = range(s, min(e, len(angles_per_frame) - 1) + 1)
+    for i, (s, b, e) in enumerate(reps):
+        lo = 0 if i == 0 else s
+        hi = n_frames - 1 if i == last else e
+        window = range(lo, min(hi, len(angles_per_frame) - 1) + 1)
         total = sum(1 for _ in window)
         if total == 0:
             continue
