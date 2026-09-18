@@ -99,7 +99,11 @@ IDEAL_MAX_SECONDS = 30.0
 # Cancelling closes the connection but does not stop the handler, so each retry
 # ADDED an analysis instead of replacing one, and the third one took the
 # container past its limit. The log said "Killed".
-MAX_CONCURRENT_ANALYSES = int(os.environ.get("MAX_CONCURRENT_ANALYSES", "1"))
+#
+# One slot was the right answer against a 954 MB container. It is 7.6 GB now, and
+# an analysis peaks at 774 MB on a 4K clip, so three fit with room over and a
+# second person uploading is no longer turned away while the first one runs.
+MAX_CONCURRENT_ANALYSES = int(os.environ.get("MAX_CONCURRENT_ANALYSES", "3"))
 _analysis_slots = threading.Semaphore(MAX_CONCURRENT_ANALYSES)
 
 
