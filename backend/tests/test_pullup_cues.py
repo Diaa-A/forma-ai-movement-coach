@@ -70,6 +70,36 @@ def test_a_frame_outside_the_evaluation_window_is_not_read_as_a_rep_height():
     assert any("70" in n or "average elbow" in n for n in ev.notes)
 
 
+def test_a_set_that_fades_says_so():
+    """Every rep lower than the last is what running out of strength looks like, and a
+    real set read 68, 76, 80, 85, 98 at the elbow. The spread alone cannot say that."""
+    angles, reps = _set([68.0, 76.0, 80.0, 85.0, 98.0])
+    ev = evaluate_pullup(angles, reps, "left", 30.0)
+
+    assert [c.flag for c in ev.cues_fired] == ["inconsistent_range"]
+    assert any("each rep finished lower than the one before" in n for n in ev.notes)
+
+
+def test_one_low_first_rep_is_named_as_one_rep():
+    """Two stock clips fire the cue on a low first rep and four that match within a
+    degree. That is a warm-up rep, and the report should say which rep it was."""
+    angles, reps = _set([66.0, 37.0, 37.0, 36.0])
+    ev = evaluate_pullup(angles, reps, "left", 30.0)
+
+    assert [c.flag for c in ev.cues_fired] == ["inconsistent_range"]
+    assert any("only the first rep came up lower" in n for n in ev.notes)
+
+
+def test_a_set_with_no_pattern_is_not_given_one():
+    """Reps that wander have no shape worth describing, and inventing one would be the
+    report telling a user something the measurement does not support."""
+    angles, reps = _set([34.0, 27.0, 49.0, 36.0, 31.0])
+    ev = evaluate_pullup(angles, reps, "left", 30.0)
+
+    assert [c.flag for c in ev.cues_fired] == ["inconsistent_range"]
+    assert not any("each rep" in n or "only the" in n for n in ev.notes)
+
+
 def test_a_single_rep_is_not_judged_for_consistency():
     """One rep has nothing to be consistent with."""
     angles, reps = _set([65.0])

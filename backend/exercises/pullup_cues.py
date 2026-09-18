@@ -152,6 +152,29 @@ def _fire(fired, flag, rep_index):
         hit.rep_indices.append(rep_index)
 
 
+def _set_shape(tops):
+    """Which reps differed, for a set whose spread is past the tolerance.
+
+    The spread on its own says a set was uneven. It does not separate a first rep that
+    came up low from four that matched, which is a warm-up rep and not a fault, from a
+    set where every rep finished lower than the one before, which is what running out of
+    strength looks like. Both were in the measured clips, and both read as one number.
+    """
+    if len(tops) < 3:
+        return None
+    tol = _RANGE_INCONSISTENCY_DEG
+    if all(b >= a for a, b in zip(tops, tops[1:])) and tops[-1] - tops[0] > tol:
+        return ("each rep finished lower than the one before: the elbow at the top opened "
+                "from {:.0f} to {:.0f} degrees across the set".format(tops[0], tops[-1]))
+    for label, odd, rest in (("first", tops[0], tops[1:]), ("last", tops[-1], tops[:-1])):
+        width = max(rest) - min(rest)
+        gap = odd - (max(rest) + min(rest)) / 2.0
+        if width <= tol and gap > tol:
+            return ("only the {} rep came up lower: its elbow at the top was {:.0f} degrees "
+                    "more open than the others, which matched within {:.0f}"
+                    .format(label, gap, width))
+    return None
+
 def evaluate_pullup(angles_per_frame, reps, side, fps, phase_per_frame=None,
                     landmarks=None):
     """Fire the cue database against one analysed set.
@@ -196,6 +219,10 @@ def evaluate_pullup(angles_per_frame, reps, side, fps, phase_per_frame=None,
     if spread is not None:
         notes.append("spread between the highest and lowest rep: {:.0f}° "
                      "(tolerance {:.0f}°)".format(spread, _RANGE_INCONSISTENCY_DEG))
+    if spread is not None and spread > _RANGE_INCONSISTENCY_DEG:
+        shape = _set_shape(tops)
+        if shape:
+            notes.append(shape)
 
     # A pull-up is filmed front-on, so the frontal plane is always the one in view
     # and coverage_guidance only has to list what is not assessed yet.
