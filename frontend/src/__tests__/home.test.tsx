@@ -7,6 +7,8 @@
  * looked at. The mark is here because its animation depends on an attribute in
  * the markup that nothing else would miss if it went.
  */
+import { readFileSync } from 'node:fs'
+
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
@@ -76,5 +78,39 @@ describe('the mark the screen draws', () => {
 
     expect(path).not.toBeNull()
     expect(path).toHaveAttribute('pathLength', '1')
+  })
+})
+
+describe('the screen keeps its opening', () => {
+  // This exists because the animation was deleted once, by a patch that replaced
+  // a range of the stylesheet by index while the opening happened to sit inside
+  // it. Nothing failed: the CSS stayed valid, the tests stayed green, and the
+  // screen simply stopped moving. A missing animation has no error attached to
+  // it, so it needs an assertion.
+  // from the package root, which is where vitest runs. import.meta.url is
+  // not a file: URL once the module has been transformed, so it cannot be
+  // resolved against.
+  const css = readFileSync('src/styles.css', 'utf8')
+
+  it.each(['mark-draw', 'mark-head', 'rise-in', 'sheet-in'])(
+    'still defines @keyframes %s',
+    (name) => {
+      expect(css).toContain(`@keyframes ${name}`)
+    },
+  )
+
+  it('still drives the elements the screen actually renders', () => {
+    const { container } = render(
+      <ExerciseSelect exercises={served} loadFailed={false} onPick={noop} />,
+    )
+
+    // each of these is named in an animation rule; renaming one in the markup
+    // without the stylesheet, or the reverse, leaves the rule pointing at
+    // nothing and is silent in the browser
+    for (const selector of ['.home-hero', '.brand-mark', '.home-headline',
+                            '.home-subline', '.home-sheet']) {
+      expect(container.querySelector(selector), selector).not.toBeNull()
+      expect(css, selector).toContain(selector)
+    }
   })
 })

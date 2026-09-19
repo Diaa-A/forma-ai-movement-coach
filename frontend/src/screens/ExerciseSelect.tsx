@@ -61,11 +61,11 @@ export default function ExerciseSelect({ exercises, loadFailed, onPick }: Props)
               className="exercise-row"
               onClick={() => onPick(ex)}
             >
-              <span className="exercise-tile" aria-hidden="true">
-                <ExerciseGlyph id={ex.id} />
+              <ExerciseGlyph id={ex.id} size={30} />
+              <span className="exercise-text">
+                <span className="exercise-name">{ex.name}</span>
+                <span className="exercise-view">filmed {ex.view_label}</span>
               </span>
-              <span className="exercise-name">{ex.name}</span>
-              <span className="exercise-view">filmed {ex.view_label}</span>
               <svg
                 width="20"
                 height="20"

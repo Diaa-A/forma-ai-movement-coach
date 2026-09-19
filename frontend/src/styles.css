@@ -491,8 +491,14 @@ a.btn { text-decoration: none; }
 
 /* ---- results -------------------------------------------------------- */
 
+/* A portrait clip filmed on a phone is taller than the screen it is played
+   back on, and pushed everything under it off the bottom. Capped, and contained
+   rather than cropped, because the overlay at the edge of the frame is the part
+   being judged. */
 .annotated-video {
   width: 100%;
+  max-height: 55svh;
+  object-fit: contain;
   border-radius: var(--radius);
   background: #000;
   display: block;
@@ -746,6 +752,77 @@ a.btn { text-decoration: none; }
 .intro-list strong { display: block; margin-bottom: 2px; }
 .intro-list span { display: block; color: var(--text-dim); font-size: 0.9rem; }
 
+/* One card on the results screen says the thing to change, and it looked like
+   the five cards around it. Given the border and a step up in size, so the eye
+   lands on it first. */
+.card-focus {
+  border-color: var(--accent);
+  font-size: var(--step-1);
+}
+
+/* The cues are things to do, in order, so they are numbered rather than
+   bulleted — the same counter the intro screen uses. */
+.cue-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  counter-reset: cue;
+}
+
+.cue-list li {
+  counter-increment: cue;
+  position: relative;
+  padding: 0 0 10px 32px;
+  margin: 0;
+}
+
+.cue-list li:last-child { padding-bottom: 0; }
+
+.cue-list li::before {
+  content: counter(cue);
+  position: absolute;
+  left: 0;
+  top: 1px;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 600;
+  display: grid;
+  place-items: center;
+}
+
+/* These arrive from the model as sentence fragments in lower case, so the tick
+   does the work a bullet would and the first letter is lifted in CSS rather
+   than by editing what the model said. */
+.tick-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tick-list li {
+  position: relative;
+  padding: 0 0 8px 26px;
+  margin: 0;
+}
+
+.tick-list li:last-child { padding-bottom: 0; }
+
+.tick-list li::first-letter { text-transform: uppercase; }
+
+.tick-list li::before {
+  content: '\2713';
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: var(--good);
+  font-weight: 700;
+}
+
 /* ---- home screen ---------------------------------------------------- */
 
 /* The thumb zone. Brand and promise take the top, where they are read once and
@@ -823,59 +900,101 @@ a.btn { text-decoration: none; }
   margin: 0 0 12px;
 }
 
+/* No gap: the rows are divided by their own hairlines rather than by space. */
 .home-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
 }
+
+.home-list > *:last-child { border-bottom: 0; }
 
 .home-sheet .banner { margin-bottom: 8px; }
 .home-sheet .disclaimer { margin-top: 16px; }
 
+/* Boxed rows put a surface inside a surface: the sheet is already one, so each
+   row carried a second border and a second fill for no gain. A hairline divides
+   them instead, the figure stands on its own rather than in a tinted tile, and
+   the name takes the display face the promise above it is set in — the same type
+   system, rather than the settings list this screen used to read as.
+
+   Nothing shrank. The row is taller than the 56px it replaced, and all of it is
+   the tap target; the box was never what made it tappable. */
 .exercise-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   width: 100%;
-  min-height: 56px;
-  padding: 8px 12px 8px 8px;
-  border-radius: 14px;
-  border: 1px solid var(--line-strong);
-  background: var(--surface-2);
+  /* the 6px is given back as negative margin, so the pressed state can reach
+     past the text without the hairlines looking inset */
+  padding: 14px 6px;
+  margin: 0 -6px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 10px 10px 0 0;
+  background: none;
   color: var(--text);
   font: inherit;
   text-align: left;
   cursor: pointer;
-  transition: transform var(--dur-quick) var(--ease-out),
-              background-color var(--dur-quick) var(--ease-out);
+  transition: background-color var(--dur-quick) var(--ease-out);
 }
 
-.exercise-row:active { transform: translateY(1px); }
+/* A press has to show somewhere now that there is no box to depress. */
+.exercise-row:active { background: var(--surface-2); }
 
-.exercise-tile {
-  flex: none;
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  background: var(--tint-accent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.exercise-text { flex: 1; min-width: 0; }
+
+.exercise-name {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 1.0625rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
-.exercise-name { flex: 1; min-width: 0; font-weight: 600; }
-.exercise-view { font-size: var(--step--1); color: var(--text-dim); }
+.exercise-view {
+  display: block;
+  margin-top: 3px;
+  font-family: var(--font-label);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
 .exercise-chevron { flex: none; display: block; }
 
-/* Exactly a row's height, so the catalogue arriving does not move the sheet.
-   The loading line that used to stand here was one short paragraph against a
-   list of three, which is half the layout shift this screen was measured at. */
+/* The row's own shape, drawn empty: a block where the figure goes and a bar
+   where the name goes. Same height as a real row, so the catalogue arriving does
+   not move the sheet — the loading line that used to stand here was one short
+   paragraph against a list of three, which is half the layout shift this screen
+   was measured at. */
 .exercise-skeleton {
-  min-height: 56px;
-  border-radius: 14px;
-  border: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 6px;
+  margin: 0 -6px;
+  min-height: 75px;
+  border-bottom: 1px solid var(--line);
+}
+
+.exercise-skeleton::before {
+  content: '';
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
   background: var(--surface-2);
-  opacity: 0.5;
+}
+
+.exercise-skeleton::after {
+  content: '';
+  flex: 1;
+  max-width: 150px;
+  height: 14px;
+  border-radius: 7px;
+  background: var(--surface-2);
 }
 
 /* ---- the home screen opening ---------------------------------------- */
