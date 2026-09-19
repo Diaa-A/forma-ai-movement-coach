@@ -283,6 +283,9 @@ li { margin-bottom: 6px; }
   display: flex;
   align-items: center;
   gap: 8px;
+  /* anything the aside renders at full width — the install steps — lands on its
+     own line under the row rather than stretching it */
+  flex-wrap: wrap;
   margin-bottom: 22px;
   color: var(--text-dim);
 }
@@ -537,34 +540,30 @@ a.btn { text-decoration: none; }
 
 .install-hint .btn-row { margin-top: 4px; }
 
-/* ---- install bar ---------------------------------------------------- */
+/* ---- install pill --------------------------------------------------- */
 
-/* Sits above the exercise list. Bordered rather than quiet, because a PWA that
-   nobody installs is just a website. */
-.install-bar {
-  border: 1px solid var(--accent);
-  border-radius: var(--radius);
-  padding: 12px 14px;
-  background: var(--tint-accent);
-}
-
-.install-bar-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.install-bar-text { flex: 1; font-size: 0.9rem; }
-
-/* the button must not stretch to full width like .btn normally does */
-.install-bar-btn {
-  width: auto;
+/* A full-width bar above the list before this. It took the width of the screen
+   to say one thing, and it sat where the exercise list now starts. Bordered
+   rather than quiet, because a PWA nobody installs is just a website. */
+.install-pill {
+  margin-left: auto;
   flex: none;
-  min-height: 40px;
-  padding: 8px 18px;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  background: var(--tint-accent);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--step--1);
+  font-weight: 600;
+  cursor: pointer;
 }
 
+/* full width, so it wraps under the masthead row rather than squeezing in beside
+   the wordmark */
 .install-steps {
+  flex-basis: 100%;
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px solid var(--line);
@@ -746,3 +745,209 @@ a.btn { text-decoration: none; }
 
 .intro-list strong { display: block; margin-bottom: 2px; }
 .intro-list span { display: block; color: var(--text-dim); font-size: 0.9rem; }
+
+/* ---- home screen ---------------------------------------------------- */
+
+/* The thumb zone. Brand and promise take the top, where they are read once and
+   then ignored; the list sits on the bottom edge, where a hand holding a phone
+   one-handed at the gym can reach it without shifting grip. Only this screen is
+   laid out this way — everything else is a column that starts at the top. */
+
+.home-main {
+  display: flex;
+  flex-direction: column;
+  /* the viewport less #root's own padding, so the sheet meets the bottom edge
+     instead of stopping a padding's width above it */
+  min-height: calc(100svh - var(--safe-top) - 20px - var(--safe-bottom) - 32px);
+}
+
+/* The pill is 44px tall and the mark is 24, so the row is sized by the pill
+   whether or not it is there yet. Chromium fires its install event a second or
+   two after load, and without this the whole screen dropped when it arrived. */
+.home-main .masthead { min-height: 44px; }
+
+.home {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.home-hero {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 18px;
+  /* 24 above, nothing below: the brief asks for clearance over the hero, and on
+     an 812-tall phone the same 24 under it was the difference between the sheet
+     landing on the bottom edge and the screen scrolling by thirteen pixels. */
+  padding: 24px 0 0;
+}
+
+.home-headline {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.12;
+}
+
+.home-headline-accent { color: var(--accent); }
+
+.home-subline { margin: 0; }
+
+.home-sheet {
+  margin-top: auto;
+  /* out past #root's side padding and its bottom padding, to the screen edges.
+     The safe-area inset goes back inside the sheet's own padding below. */
+  margin-left: -18px;
+  margin-right: -18px;
+  margin-bottom: calc(-1 * (var(--safe-bottom) + 32px));
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  border-radius: 24px 24px 0 0;
+  padding: 20px 18px calc(28px + var(--safe-bottom));
+}
+
+/* An h1 in the markup and a label to look at. The question is the heading, and
+   the answer is the list directly under it, so a display-sized heading here
+   would shout the part nobody needs to read twice. */
+.home-sheet-title {
+  font-family: var(--font-label);
+  font-size: var(--step--1);
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin: 0 0 12px;
+}
+
+.home-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.home-sheet .banner { margin-bottom: 8px; }
+.home-sheet .disclaimer { margin-top: 16px; }
+
+.exercise-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 12px 8px 8px;
+  border-radius: 14px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform var(--dur-quick) var(--ease-out),
+              background-color var(--dur-quick) var(--ease-out);
+}
+
+.exercise-row:active { transform: translateY(1px); }
+
+.exercise-tile {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--tint-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.exercise-name { flex: 1; min-width: 0; font-weight: 600; }
+.exercise-view { font-size: var(--step--1); color: var(--text-dim); }
+.exercise-chevron { flex: none; display: block; }
+
+/* Exactly a row's height, so the catalogue arriving does not move the sheet.
+   The loading line that used to stand here was one short paragraph against a
+   list of three, which is half the layout shift this screen was measured at. */
+.exercise-skeleton {
+  min-height: 56px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  opacity: 0.5;
+}
+
+/* ---- the home screen opening ---------------------------------------- */
+
+/* The screen introduces itself as it arrives: the mark draws itself, the head
+   drops on top, the promise rises under it and the sheet comes up from the
+   bottom edge.
+
+   On the elements themselves rather than behind a launch splash. A splash can
+   only run for an app started from the home screen, because a browser has no
+   blank window to cover, so anyone opening the link in Safari or on a laptop
+   would see none of it. This costs nothing extra and everybody gets it.
+
+   The text moves without fading. An element at opacity 0 has not been painted,
+   so fading the headline in would push Largest Contentful Paint out by the
+   length of its own animation; sliding an element that is already painted does
+   not. The mark may fade, because it is small and never the largest element.
+
+   Reduced motion needs nothing here. The backstop above cuts every animation to
+   0.01ms, and these all fill both ways, so each element lands on its finished
+   state instead of being stranded at the start. */
+
+.home-hero .brand-mark path {
+  stroke-dasharray: 1;
+  animation: mark-draw 520ms cubic-bezier(0.45, 0, 0.25, 1) both;
+}
+
+.home-hero .brand-mark circle {
+  /* so the squash on landing happens about the head's base rather than the
+     middle of the viewBox */
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: mark-head 380ms cubic-bezier(0.2, 0, 0, 1) 440ms both;
+}
+
+.home-headline { animation: rise-in 420ms var(--ease-out) 300ms both; }
+.home-subline  { animation: rise-in 420ms var(--ease-out) 380ms both; }
+.home-sheet    { animation: sheet-in 560ms cubic-bezier(0.2, 0, 0, 1) 200ms both; }
+
+@keyframes mark-draw {
+  from { stroke-dashoffset: 1; }
+  to   { stroke-dashoffset: 0; }
+}
+
+/* inside the SVG these are viewBox units, so -7px is a drop of about forty
+   screen pixels at this size */
+@keyframes mark-head {
+  0%   { opacity: 0; transform: translateY(-7px); }
+  60%  { opacity: 1; transform: translateY(0.3px) scale(1.06, 0.94); }
+  85%  { transform: translateY(-0.2px) scale(0.99, 1.01); }
+  100% { opacity: 1; transform: none; }
+}
+
+@keyframes rise-in {
+  from { transform: translateY(10px); }
+  to   { transform: none; }
+}
+
+/* Its own height, so it arrives from off the bottom edge whatever that edge is
+   on this phone. Transform, so it never lengthens the page while it travels. */
+@keyframes sheet-in {
+  from { transform: translateY(100%); }
+  to   { transform: none; }
+}
+
+/* Wider than a phone: the sheet stops pretending to be one and becomes a card. */
+@media (min-width: 621px) {
+  .home-sheet {
+    margin-left: 0;
+    margin-right: 0;
+    margin-bottom: 0;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+  }
+}

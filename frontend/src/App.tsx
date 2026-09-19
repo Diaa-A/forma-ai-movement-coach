@@ -244,18 +244,19 @@ export default function App() {
     inFlight.current?.abort()
   }
 
-  return (
-    <main>
-      <Masthead />
+  const home = state.screen === 'select'
 
-      <Stepper current={STEP_OF[state.screen]} />
+  return (
+    <main className={home ? 'home-main' : undefined}>
+      <Masthead aside={home ? <InstallPrompt /> : undefined} />
+
+      {/* The picker carries no step marker: it is where the flow starts, and a
+          progress bar over the first screen counts a step nobody has taken yet.
+          STEP_OF still numbers it, so the filming guide reads as step 2 of 4. */}
+      {!home && <Stepper current={STEP_OF[state.screen]} />}
 
       {!online && <OfflineNotice />}
 
-      {/* Above the exercise list on purpose. Installing to the home screen is the
-          whole reason this is a PWA rather than a website, and when it sat at the
-          bottom of this screen it fell below the fold on a phone -- invisible on
-          the one device it exists for. */}
       {state.screen === 'intro' && (
         <Intro
           onStart={() => {
@@ -265,9 +266,7 @@ export default function App() {
         />
       )}
 
-      {state.screen === 'select' && <InstallPrompt />}
-
-      {state.screen === 'select' && (
+      {home && (
         <ExerciseSelect
           exercises={state.exercises}
           loadFailed={state.exercisesFailed}
@@ -334,7 +333,10 @@ export default function App() {
         />
       )}
 
-      <Disclaimer />
+      {/* The picker keeps it inside the sheet instead, so the one screen whose
+          content is anchored to the bottom edge does not end on a rule and a
+          paragraph below the fold. Same component, same size, every screen. */}
+      {!home && <Disclaimer />}
     </main>
   )
 }

@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react'
+
 /**
  * The app's name, on screen.
  *
@@ -15,8 +17,17 @@
  * screens carry the accessible structure, so the mark is hidden from assistive
  * tech and the wordmark is a plain div — every screen already has its own h1,
  * and the results screen's tests assert on the exact set of h3s present.
+ *
+ * `aside` rides at the right end of the row. The row's height is fixed, so the
+ * install pill arriving a couple of seconds after load — Chromium fires its event
+ * late — moves nothing that is already on screen. Anything the aside renders at
+ * full width wraps underneath the row instead of stretching it.
  */
-export default function Masthead() {
+interface Props {
+  aside?: ReactNode
+}
+
+export default function Masthead({ aside }: Props) {
   return (
     <div className="masthead">
       {/* Redrawn rather than scaled down from the icon. The icon has seven
@@ -43,6 +54,7 @@ export default function Masthead() {
         />
       </svg>
       <span className="wordmark">Forma</span>
+      {aside}
     </div>
   )
 }

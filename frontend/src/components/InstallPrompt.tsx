@@ -22,12 +22,13 @@ type Mode = 'waiting' | 'native' | 'ios' | 'in-app' | 'manual'
 /**
  * Getting the app onto the home screen.
  *
- * This is the point of building a PWA rather than a website, so it is deliberately
- * an explicit control at the top of the first screen rather than a hint at the
- * bottom. The previous version rendered below the exercise list, which on a phone
- * put it under the fold, and returned nothing at all when Chromium had not fired
- * its event yet — so the one feature the whole delivery choice rests on was
- * invisible on the device it was built for.
+ * This is the point of building a PWA rather than a website, so it is a real
+ * control on the first screen rather than a hint at the bottom. It used to be a
+ * full-width bar above the exercise list; it is a pill at the end of the masthead
+ * row now, which keeps the list at the bottom of the screen where a thumb reaches
+ * it. The row reserves the pill's height whether or not it renders, so the pill
+ * arriving late — Chromium fires its event a second or two after load — does not
+ * push anything down.
  *
  * Three routes, because the platforms genuinely differ:
  *
@@ -90,23 +91,24 @@ export default function InstallPrompt() {
     hide()
   }
 
+  // The pill sits in the masthead row; the steps wrap onto their own line under
+  // it, which is why they are siblings rather than nested.
   return (
-    <div className="install-bar">
-      <div className="install-bar-row">
-        <span className="install-bar-text">
-          <strong>Add to your home screen</strong>
-          <span className="muted small"> — opens like an app, handy at the gym</span>
-        </span>
-        {mode === 'native' ? (
-          <button className="btn btn-primary install-bar-btn" onClick={installNow}>
-            Install
-          </button>
-        ) : (
-          <button className="btn install-bar-btn" onClick={() => setOpen(!open)}>
-            {open ? 'Hide' : 'How'}
-          </button>
-        )}
-      </div>
+    <>
+      {mode === 'native' ? (
+        <button type="button" className="install-pill" onClick={installNow}>
+          Install
+        </button>
+      ) : (
+        <button
+          type="button"
+          className="install-pill"
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+        >
+          Add to home screen
+        </button>
+      )}
 
       {open && mode !== 'native' && (
         <div className="install-steps small">
@@ -154,7 +156,7 @@ export default function InstallPrompt() {
           </button>
         </div>
       )}
-    </div>
+    </>
   )
 }
 
