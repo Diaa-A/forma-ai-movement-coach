@@ -2,6 +2,12 @@ import type { CoachingReport } from '../types'
 
 interface Props {
   report: CoachingReport
+  /** what was asked, if it was asked out loud. Rendered inside the answer's own
+   *  card rather than in one above it: two cards under the same heading, one
+   *  after the other, read as a rendering fault rather than as a question and
+   *  its answer. Results keeps its own card for the case where a note was left
+   *  but no answer came back. */
+  transcript?: string | null
 }
 
 /**
@@ -16,7 +22,7 @@ interface Props {
  * "What you did well" heading would reintroduce exactly the false-pass reading
  * the backend went to trouble to prevent.
  */
-export default function ReportView({ report }: Props) {
+export default function ReportView({ report, transcript }: Props) {
   return (
     <div className="stack">
       {/* First, and before the findings. Someone who recorded a voice note asked
@@ -25,6 +31,12 @@ export default function ReportView({ report }: Props) {
       {report.answer_to_question && (
         <section className="card">
           <h3>What you asked</h3>
+          {transcript && (
+            <>
+              <p className="small asked-quote">“{transcript}”</p>
+              <hr className="card-rule" />
+            </>
+          )}
           <p style={{ marginBottom: 0 }}>{report.answer_to_question}</p>
         </section>
       )}

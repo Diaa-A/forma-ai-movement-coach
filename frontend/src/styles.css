@@ -752,6 +752,20 @@ a.btn { text-decoration: none; }
 .intro-list strong { display: block; margin-bottom: 2px; }
 .intro-list span { display: block; color: var(--text-dim); font-size: 0.9rem; }
 
+/* The question, quoted back above the answer to it. Quiet, because it is the
+   part the reader already knows. */
+.asked-quote {
+  margin: 0;
+  font-style: italic;
+  color: var(--text-dim);
+}
+
+.card-rule {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 10px 0;
+}
+
 /* One card on the results screen says the thing to change, and it looked like
    the five cards around it. Given the border and a step up in size, so the eye
    lands on it first. */

@@ -245,3 +245,39 @@ describe('deleting an analysis now', () => {
     expect(screen.queryByText(/can't be undone/i)).not.toBeInTheDocument()
   })
 })
+
+describe('a question asked out loud', () => {
+  const asked = 'Did I go all the way down?'
+  const answered: AnalyzeResponse = {
+    ...okResult,
+    voice_transcript: asked,
+    coaching_report: {
+      ...okResult.coaching_report!,
+      answer_to_question: 'Not on the last two reps.',
+    },
+  }
+
+  it('puts the question and its answer in one card, not two', () => {
+    show(answered)
+
+    const headings = screen.getAllByRole('heading', { level: 3 })
+      .filter((h) => h.textContent === 'What you asked')
+    expect(headings).toHaveLength(1)
+
+    // both halves live inside that one card
+    const card = headings[0].closest('section')!
+    expect(card).toHaveTextContent(asked)
+    expect(card).toHaveTextContent('Not on the last two reps.')
+  })
+
+  it('keeps the quote on its own when nothing answered it', () => {
+    // okResult carries a transcript and no answer_to_question, which is what a
+    // run that transcribed but could not be coached looks like
+    show(okResult)
+
+    const headings = screen.getAllByRole('heading', { level: 3 })
+      .filter((h) => h.textContent === 'What you asked')
+    expect(headings).toHaveLength(1)
+    expect(headings[0].closest('section')).toHaveTextContent(/going deep enough/)
+  })
+})

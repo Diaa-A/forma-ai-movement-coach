@@ -110,16 +110,21 @@ export default function Results({ result, feedbackFormUrl, onRestart }: Props) {
 
       {analysed && <KeyFrames frames={result.key_frames} />}
 
-      {result.voice_transcript && (
+      {/* Only when nothing answered it. Where there is an answer the question
+          travels with it, into the report's own card. */}
+      {result.voice_transcript && !result.coaching_report?.answer_to_question && (
         <section className="card card-tight">
           <h3>What you asked</h3>
-          <p className="small" style={{ margin: 0, fontStyle: 'italic' }}>
+          <p className="small asked-quote" style={{ marginBottom: 0 }}>
             “{result.voice_transcript}”
           </p>
         </section>
       )}
 
-      {result.coaching_report && <ReportView report={result.coaching_report} />}
+      {result.coaching_report && (
+        <ReportView report={result.coaching_report}
+                    transcript={result.voice_transcript} />
+      )}
 
       {feedbackFormUrl && (
         <section className="card card-tight">
