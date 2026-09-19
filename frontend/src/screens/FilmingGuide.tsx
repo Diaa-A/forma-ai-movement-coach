@@ -1,7 +1,10 @@
-import type { Exercise } from '../types'
+import type { Exercise, Limits } from '../types'
 
 interface Props {
   exercise: Exercise
+  /** served, not written here: the band below is the one the server actually
+   *  warns on, and a copy of it in this file is a copy that can drift */
+  limits: Limits
   onContinue: () => void
   onBack: () => void
 }
@@ -25,7 +28,7 @@ const VIEW_FOR_PLANE: Record<string, string> = {
  * Every string here comes from the backend profile, so this screen and the
  * coaching output can't drift apart.
  */
-export default function FilmingGuide({ exercise, onContinue, onBack }: Props) {
+export default function FilmingGuide({ exercise, limits, onContinue, onBack }: Props) {
   const thisView = VIEW_FOR_PLANE[planeFor(exercise)] ?? exercise.view_label
 
   return (
@@ -66,7 +69,8 @@ export default function FilmingGuide({ exercise, onContinue, onBack }: Props) {
 
       <div className="card card-tight">
         <p className="small muted" style={{ margin: 0 }}>
-          Keep the clip between 5 and 30 seconds, with your whole body in frame
+          Keep the clip between {limits.ideal_min_seconds} and{' '}
+          {limits.ideal_max_seconds} seconds, with your whole body in frame
           the whole time. A few good reps beat a long set.
         </p>
       </div>

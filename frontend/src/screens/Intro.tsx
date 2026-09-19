@@ -27,7 +27,7 @@ export default function Intro({ onStart }: Props) {
 
       <ol className="intro-list">
         <li>
-          <strong>Film one set from the side.</strong>
+          <strong>Film one set, from the angle we show you.</strong>
           <span>
             Five to thirty seconds, whole body in frame. We show you how to
             frame it before you record anything.
@@ -45,7 +45,7 @@ export default function Intro({ onStart }: Props) {
           <strong>You get what it measured, and what it could not.</strong>
           <span>
             An annotated video, the moments that mattered, and written coaching
-            — plus the things a side-on clip cannot show, said out loud rather
+            — plus the things your camera angle cannot show, said out loud rather
             than left out.
           </span>
         </li>

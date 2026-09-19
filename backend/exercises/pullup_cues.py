@@ -105,7 +105,7 @@ PULLUP_PROFILE = ExerciseProfile(
     filming_guide=("Film from in front of the bar, far enough back that your "
                    "whole body stays in frame at the top and the bottom. 1080p "
                    "is plenty. Filming from the side hides one arm behind the "
-                   "other and there is nothing this system can do about that."),
+                   "other, so the app can't see both arms."),
     plane_assessments={
         FRONTAL: ["repetition count", "how consistent your range of motion is"],
         # Empty on purpose: body swing is the only sagittal assessment and it is

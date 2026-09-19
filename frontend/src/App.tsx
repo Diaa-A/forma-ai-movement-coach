@@ -277,6 +277,7 @@ export default function App() {
       {state.screen === 'guide' && state.chosen && (
         <FilmingGuide
           exercise={state.chosen}
+          limits={state.limits}
           onContinue={() => go({
             type: 'to',
             screen: consentGiven(state.limits.retention_hours) ? 'capture' : 'consent',

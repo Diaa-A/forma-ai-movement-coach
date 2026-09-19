@@ -32,14 +32,14 @@ export default function ReportView({ report }: Props) {
       {report.what_went_well.length > 0 && (
         <section className="card">
           <h3>What you did well</h3>
-          <ul style={{ marginBottom: 0 }}>
+          <ul className="tick-list" style={{ marginBottom: 0 }}>
             {report.what_went_well.map((item) => <li key={item}>{item}</li>)}
           </ul>
         </section>
       )}
 
       {report.primary_issue && (
-        <section className="card">
+        <section className="card card-focus">
           <h3>Main thing to work on</h3>
           <p style={{ marginBottom: 0 }}>{report.primary_issue}</p>
         </section>
@@ -57,9 +57,9 @@ export default function ReportView({ report }: Props) {
       {report.corrective_cues.length > 0 && (
         <section className="card">
           <h3>Try this</h3>
-          <ul style={{ marginBottom: 0 }}>
+          <ol className="cue-list" style={{ marginBottom: 0 }}>
             {report.corrective_cues.map((cue) => <li key={cue}>{cue}</li>)}
-          </ul>
+          </ol>
         </section>
       )}
 
