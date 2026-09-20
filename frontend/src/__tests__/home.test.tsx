@@ -38,7 +38,7 @@ const served: Exercise[] = [
 
 describe('the exercise list', () => {
   it('renders one row per exercise the server served', () => {
-    render(<ExerciseSelect exercises={served} loadFailed={false} onPick={noop} />)
+    render(<ExerciseSelect exercises={served} loadFailed={false} opening onPick={noop} />)
 
     expect(screen.getAllByRole('button')).toHaveLength(3)
     expect(screen.getByRole('button', { name: /Pull-up/ })).toBeInTheDocument()
@@ -48,7 +48,7 @@ describe('the exercise list', () => {
 
   it('holds the list height with three skeleton rows while it loads', () => {
     const { container } = render(
-      <ExerciseSelect exercises={[]} loadFailed={false} onPick={noop} />,
+      <ExerciseSelect exercises={[]} loadFailed={false} opening onPick={noop} />,
     )
 
     expect(container.querySelectorAll('.exercise-skeleton')).toHaveLength(3)
@@ -59,7 +59,7 @@ describe('the exercise list', () => {
 
   it('drops the skeletons when the catalogue failed, and says so', () => {
     const { container } = render(
-      <ExerciseSelect exercises={[]} loadFailed onPick={noop} />,
+      <ExerciseSelect exercises={[]} loadFailed opening onPick={noop} />,
     )
 
     expect(container.querySelectorAll('.exercise-skeleton')).toHaveLength(0)
@@ -101,7 +101,7 @@ describe('the screen keeps its opening', () => {
 
   it('still drives the elements the screen actually renders', () => {
     const { container } = render(
-      <ExerciseSelect exercises={served} loadFailed={false} onPick={noop} />,
+      <ExerciseSelect exercises={served} loadFailed={false} opening onPick={noop} />,
     )
 
     // each of these is named in an animation rule; renaming one in the markup
@@ -112,5 +112,26 @@ describe('the screen keeps its opening', () => {
       expect(container.querySelector(selector), selector).not.toBeNull()
       expect(css, selector).toContain(selector)
     }
+  })
+})
+
+describe('the opening is for arriving, not for coming back', () => {
+  // Coming back from the filming guide remounts this screen. Replaying the
+  // whole opening underneath the screen transition that brought you here read
+  // as a stutter, so App plays it once and then stops asking for it.
+  it('marks the screen as opening the first time', () => {
+    const { container } = render(
+      <ExerciseSelect exercises={served} loadFailed={false} opening onPick={noop} />,
+    )
+    expect(container.querySelector('.home-opening')).not.toBeNull()
+  })
+
+  it('does not, on the way back', () => {
+    const { container } = render(
+      <ExerciseSelect exercises={served} loadFailed={false} opening={false}
+                      onPick={noop} />,
+    )
+    expect(container.querySelector('.home')).not.toBeNull()
+    expect(container.querySelector('.home-opening')).toBeNull()
   })
 })

@@ -25,11 +25,24 @@ import type { ReactNode } from 'react'
  */
 interface Props {
   aside?: ReactNode
+  /** where back goes from the screen below, or nothing on the screens that
+   *  have nowhere to go back to */
+  onBack?: () => void
 }
 
-export default function Masthead({ aside }: Props) {
+export default function Masthead({ aside, onBack }: Props) {
   return (
     <div className="masthead">
+      {onBack && (
+        <button type="button" className="masthead-back" onClick={onBack}
+                aria-label="Back">
+          <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"
+               focusable="false">
+            <path d="M15 5 L8 12 L15 19" fill="none" stroke="currentColor"
+                  strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+      )}
       {/* Redrawn rather than scaled down from the icon. The icon has seven
           segments and reads fine at 192 px; the same figure at 24 px came out a
           squiggle, each segment landing at about five pixels. Three segments and

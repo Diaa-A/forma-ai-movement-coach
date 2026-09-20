@@ -6,6 +6,11 @@ import type { Exercise } from '../types'
 interface Props {
   exercises: Exercise[]
   loadFailed: boolean
+  /** true the first time this screen is reached, false when coming back to it.
+   *  Replaying the opening on the way back from the filming guide read as a
+   *  stutter: the mark redrew and the sheet slid up again under a screen
+   *  transition that was already running. */
+  opening: boolean
   onPick: (exercise: Exercise) => void
 }
 
@@ -23,11 +28,11 @@ interface Props {
  * loading text that used to sit here was shorter than the list that replaced it,
  * which is half of the layout shift this screen was measured at.
  */
-export default function ExerciseSelect({ exercises, loadFailed, onPick }: Props) {
+export default function ExerciseSelect({ exercises, loadFailed, opening, onPick }: Props) {
   const loading = exercises.length === 0 && !loadFailed
 
   return (
-    <div className="home">
+    <div className={opening ? 'home home-opening' : 'home'}>
       <div className="home-hero">
         <BrandMark />
         <p className="home-headline">

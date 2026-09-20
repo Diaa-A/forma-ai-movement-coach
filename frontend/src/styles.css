@@ -837,6 +837,26 @@ a.btn { text-decoration: none; }
   font-weight: 700;
 }
 
+/* The one fixed way back, in the corner a thumb reaches on a phone held in
+   either hand. The worded buttons on the screens themselves stay: "Back to
+   filming tips" says where it lands, and an arrow only says "not forward". */
+.masthead-back {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin-left: -8px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: background-color var(--dur-quick) var(--ease-out);
+}
+
+.masthead-back:active { background: var(--surface-2); }
+
 /* ---- home screen ---------------------------------------------------- */
 
 /* The thumb zone. Brand and promise take the top, where they are read once and
@@ -1027,16 +1047,20 @@ a.btn { text-decoration: none; }
    length of its own animation; sliding an element that is already painted does
    not. The mark may fade, because it is small and never the largest element.
 
+   Scoped to .home-opening, which App sets only on the first arrival. Coming
+   back from the filming guide used to replay all of it underneath a screen
+   transition that was already running, and the two together read as a stutter.
+
    Reduced motion needs nothing here. The backstop above cuts every animation to
    0.01ms, and these all fill both ways, so each element lands on its finished
    state instead of being stranded at the start. */
 
-.home-hero .brand-mark path {
+.home-opening .brand-mark path {
   stroke-dasharray: 1;
   animation: mark-draw 520ms cubic-bezier(0.45, 0, 0.25, 1) both;
 }
 
-.home-hero .brand-mark circle {
+.home-opening .brand-mark circle {
   /* so the squash on landing happens about the head's base rather than the
      middle of the viewBox */
   transform-box: fill-box;
@@ -1044,9 +1068,9 @@ a.btn { text-decoration: none; }
   animation: mark-head 380ms cubic-bezier(0.2, 0, 0, 1) 440ms both;
 }
 
-.home-headline { animation: rise-in 420ms var(--ease-out) 300ms both; }
-.home-subline  { animation: rise-in 420ms var(--ease-out) 380ms both; }
-.home-sheet    { animation: sheet-in 560ms cubic-bezier(0.2, 0, 0, 1) 200ms both; }
+.home-opening .home-headline { animation: rise-in 420ms var(--ease-out) 300ms both; }
+.home-opening .home-subline  { animation: rise-in 420ms var(--ease-out) 380ms both; }
+.home-opening .home-sheet    { animation: sheet-in 560ms cubic-bezier(0.2, 0, 0, 1) 200ms both; }
 
 @keyframes mark-draw {
   from { stroke-dashoffset: 1; }

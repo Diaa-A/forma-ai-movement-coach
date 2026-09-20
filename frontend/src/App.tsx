@@ -56,6 +56,10 @@ interface State {
   uploadDone: boolean
   result: AnalyzeResponse | null
   error: ApiError | null
+  /** whether the picker has been left once. Page-load scoped, so it survives a
+   *  restart: the opening animation belongs to arriving at the app, not to
+   *  arriving at the picker. */
+  openingPlayed: boolean
 }
 
 type Action =
@@ -70,6 +74,17 @@ type Action =
   | { type: 'succeeded'; result: AnalyzeResponse }
   | { type: 'failed'; error: ApiError }
   | { type: 'restart' }
+
+// Where the masthead's back control goes, per screen. Absent means there is
+// nowhere sensible to go: the picker is the start, processing has a request in
+// flight, and the results and error screens carry their own way out. The
+// screens that appear here keep their own worded button as well, because "Back
+// to filming tips" says where it lands and an arrow does not.
+const BACK_FROM: Partial<Record<Screen, Action>> = {
+  guide: { type: 'restart' },
+  consent: { type: 'to', screen: 'guide' },
+  capture: { type: 'to', screen: 'guide' },
+}
 
 const initial: State = {
   // shown once per device; every visit after the first opens on the picker
@@ -88,6 +103,7 @@ const initial: State = {
   uploadDone: false,
   result: null,
   error: null,
+  openingPlayed: false,
 }
 
 // A single exercise so the app is usable even if /exercises is unreachable on
@@ -113,7 +129,8 @@ function reducer(state: State, action: Action): State {
       // keep whatever limits we have; FALLBACK is already the initial value
       return { ...state, exercises: OFFLINE_FALLBACK, exercisesFailed: true }
     case 'pick':
-      return { ...state, chosen: action.exercise, screen: 'guide' }
+      return { ...state, chosen: action.exercise, screen: 'guide',
+               openingPlayed: true }
     case 'to':
       return { ...state, screen: action.screen }
     case 'submit':
@@ -148,7 +165,8 @@ function reducer(state: State, action: Action): State {
       return { ...initial, screen: 'select',
                exercises: state.exercises, limits: state.limits,
                feedbackFormUrl: state.feedbackFormUrl,
-               exercisesFailed: state.exercisesFailed }
+               exercisesFailed: state.exercisesFailed,
+               openingPlayed: state.openingPlayed }
   }
 }
 
@@ -170,6 +188,13 @@ export default function App() {
   const [state, dispatch] = useReducer(reducer, initial)
   const inFlight = useRef<{ abort: () => void } | null>(null)
   const online = useOnline()
+
+  // A new screen starts at its top. Without this a long results screen left
+  // scrolled halfway down opens the next screen halfway down as well, which
+  // reads as content missing rather than as the page being scrolled.
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [state.screen])
 
   // Anything that swaps the screen goes through here rather than dispatch, so it
   // gets a View Transition where the browser has one. Everything else — upload
@@ -248,7 +273,10 @@ export default function App() {
 
   return (
     <main className={home ? 'home-main' : undefined}>
-      <Masthead aside={home ? <InstallPrompt /> : undefined} />
+      <Masthead aside={home ? <InstallPrompt /> : undefined}
+                onBack={BACK_FROM[state.screen]
+                  ? () => go(BACK_FROM[state.screen]!)
+                  : undefined} />
 
       {/* The picker carries no step marker: it is where the flow starts, and a
           progress bar over the first screen counts a step nobody has taken yet.
@@ -270,6 +298,7 @@ export default function App() {
         <ExerciseSelect
           exercises={state.exercises}
           loadFailed={state.exercisesFailed}
+          opening={!state.openingPlayed}
           onPick={(exercise) => go({ type: 'pick', exercise })}
         />
       )}
