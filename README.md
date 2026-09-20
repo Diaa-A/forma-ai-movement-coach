@@ -292,3 +292,13 @@ Groq-hosted `whisper-large-v3`. This is the offline fallback only.
     ├── uploads/               API multipart uploads (gitignored)
     └── outputs/               per-job artefacts (gitignored)
 ```
+
+## Licence
+
+MIT, see `LICENSE`.
+
+The MediaPipe pose models in `data/models/` are Google's, distributed under the
+Apache License 2.0, and are not covered by the above. Test clips are not in the
+repository; the Pexels footage used for evaluation is free to use with
+attribution recommended, and `data/test_videos/pexels/<query>/SOURCE.txt`
+records where each one came from.
