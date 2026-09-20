@@ -1,7 +1,6 @@
-"""Pydantic models for /analyze response.
+"""Pydantic models for the /analyze and /exercises responses.
 
-The request itself is multipart/form-data so we don't model it here — FastAPI
-unpacks the parts directly in the route handler. See `routes.py`.
+The request is multipart/form-data and is unpacked in the route handler.
 """
 from typing import List, Optional, Any
 from pydantic import BaseModel, Field
@@ -10,10 +9,9 @@ from pydantic import BaseModel, Field
 class ExerciseOut(BaseModel):
     """One entry in GET /exercises.
 
-    `filming_guide` is the string the PWA shows *before* the user records, so the
-    guidance and the coaching come from the same source. `assesses` is the
-    plane -> assessments map, which lets the UI say what a given camera view can
-    and can't cover without knowing anything about anatomy itself.
+    `filming_guide` is shown before recording, so guidance and coaching come from
+    the same string. `assesses` maps plane -> assessments, which is how the UI
+    says what a camera view can cover without knowing any anatomy.
     """
     id: str
     name: str
@@ -25,15 +23,11 @@ class ExerciseOut(BaseModel):
 class LimitsOut(BaseModel):
     """What /analyze will accept, served rather than duplicated.
 
-    The PWA checks a file before uploading it, which needs the same numbers the
-    server enforces. Those numbers were being kept as a second hand-maintained
-    copy in the frontend — with a comment admitting it — and the copy had already
-    drifted: it claimed a server-side 3-45 second gate that did not exist. This is
-    the same argument as `filming_guide`, and it has the same answer.
+    Same argument as filming_guide. The frontend used to keep its own copy of
+    these numbers and it had already drifted -- it claimed a 3-45 second gate
+    that didn't exist anywhere in the server.
 
-    `min_seconds` / `max_seconds` are what the server refuses outside of.
-    `ideal_*` is the range that gives a good read, which the UI warns about but
-    does not block.
+    min/max is what gets refused outright, ideal_* only earns a warning.
     """
     max_video_bytes: int
     max_audio_bytes: int
@@ -43,11 +37,8 @@ class LimitsOut(BaseModel):
     max_seconds: float
     ideal_min_seconds: float
     ideal_max_seconds: float
-    # Served for the same reason as the rest of it. The consent copy has to state
-    # a retention period, and a period typed into the frontend is a period that
-    # can drift away from the one the sweep enforces. `retention_note` is the
-    # wording, built from the number beside it, so the UI shows a sentence rather
-    # than doing arithmetic on hours.
+    # The consent copy states this period, so it comes from the sweep that
+    # enforces it. retention_note is the wording, built from the number.
     retention_hours: float
     retention_note: str
 
@@ -55,10 +46,9 @@ class LimitsOut(BaseModel):
 class ExercisesResponse(BaseModel):
     exercises: List[ExerciseOut]
     limits: LimitsOut
-    # Present only while a user-testing round is running (FEEDBACK_FORM_URL in
-    # the environment). May carry a {job_id} placeholder, which the client fills
-    # in so a form response joins to the exact analysis the participant saw --
-    # that join is what turns "participant 3 rated clarity 4" into data.
+    # only set while a testing round is running. The {job_id} placeholder gets
+    # filled in by the client -- that join is what turns "participant 3 rated
+    # clarity 4" into something you can actually use
     feedback_form_url: Optional[str] = None
 
 
@@ -66,10 +56,9 @@ class KeyFrame(BaseModel):
     url: str
     label: str
     timestamp: float
-    # True when joints were actually marked as at fault on this frame. Additive,
-    # defaulted, so nothing that already reads this response breaks. The UI needs
-    # it to caption the image honestly: on a clean set there is no red limb to
-    # point at, and "where form drifted most" then sends the user looking for one.
+    # True when joints were marked at fault on this frame. On a clean set there
+    # is no red limb, and captioning it "where form drifted most" sends the user
+    # hunting for one that isn't there.
     highlighted: bool = False
 
 
@@ -84,8 +73,7 @@ class RepStat(BaseModel):
 
 
 class CoachingReportOut(BaseModel):
-    # First, because it is the thing the user asked about. Declared here or
-    # pydantic drops it out of the response and the field silently never arrives.
+    # Declared, or pydantic drops it and the field silently never arrives.
     answer_to_question: Optional[str] = None
     what_went_well: List[str]
     primary_issue: str

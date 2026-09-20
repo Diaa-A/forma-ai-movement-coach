@@ -16,7 +16,7 @@ whatever k turns out to be.
 
 Everything Layer 1 put in the prompt. That means every `fault` and `fix` string
 from a fired cue, every positive, every diagnostic note, the exercise name, the
-rep count and the side analysed. **Notes are authorised too**, which matters: they
+rep count and the side analysed. Notes are authorised too, which matters: they
 carry derived angle values ("average knee angle at the bottom: 88 degrees"), so a
 model quoting 88 degrees is repeating Layer 1, not inventing. A claim is only a
 violation when it has no traceable source in that payload.

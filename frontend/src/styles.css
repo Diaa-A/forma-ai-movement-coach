@@ -945,14 +945,13 @@ a.btn { text-decoration: none; }
 .home-sheet .banner { margin-bottom: 8px; }
 .home-sheet .disclaimer { margin-top: 16px; }
 
-/* Boxed rows put a surface inside a surface: the sheet is already one, so each
-   row carried a second border and a second fill for no gain. A hairline divides
-   them instead, the figure stands on its own rather than in a tinted tile, and
-   the name takes the display face the promise above it is set in — the same type
-   system, rather than the settings list this screen used to read as.
+/* Boxed rows put a surface inside a surface. The sheet is already one, so every
+   row was carrying a second border and a second fill for nothing. Hairline
+   between them instead, figure standing on its own rather than in a tinted
+   tile, name in the display face the promise above it uses.
 
-   Nothing shrank. The row is taller than the 56px it replaced, and all of it is
-   the tap target; the box was never what made it tappable. */
+   Nothing shrank -- the row is taller than the 56px it replaced and all of it
+   is the tap target. The box was never what made it tappable */
 .exercise-row {
   display: flex;
   align-items: center;
@@ -1033,27 +1032,23 @@ a.btn { text-decoration: none; }
 
 /* ---- the home screen opening ---------------------------------------- */
 
-/* The screen introduces itself as it arrives: the mark draws itself, the head
-   drops on top, the promise rises under it and the sheet comes up from the
-   bottom edge.
+/* The screen introduces itself: mark draws, head drops on top, promise rises
+   under it, sheet comes up from the bottom edge.
 
-   On the elements themselves rather than behind a launch splash. A splash can
-   only run for an app started from the home screen, because a browser has no
-   blank window to cover, so anyone opening the link in Safari or on a laptop
-   would see none of it. This costs nothing extra and everybody gets it.
+   On the elements rather than behind a launch splash -- a splash only runs for
+   an app started from the home screen, so anyone opening the link in Safari or
+   on a laptop would see none of it. This way everybody gets it.
 
-   The text moves without fading. An element at opacity 0 has not been painted,
-   so fading the headline in would push Largest Contentful Paint out by the
-   length of its own animation; sliding an element that is already painted does
-   not. The mark may fade, because it is small and never the largest element.
+   Text moves but doesn't fade. An element at opacity 0 hasn't been painted, so
+   fading the headline in pushes LCP out by the length of its own animation.
+   Sliding something already painted doesn't. The mark can fade, it's small and
+   never the largest element.
 
-   Scoped to .home-opening, which App sets only on the first arrival. Coming
-   back from the filming guide used to replay all of it underneath a screen
-   transition that was already running, and the two together read as a stutter.
+   .home-opening is set by App on the first arrival only. Coming back from the
+   guide replayed the lot underneath a transition that was already running
 
-   Reduced motion needs nothing here. The backstop above cuts every animation to
-   0.01ms, and these all fill both ways, so each element lands on its finished
-   state instead of being stranded at the start. */
+   Reduced motion needs nothing -- the backstop above cuts animations to 0.01ms
+   and these all fill both ways, so everything lands on its finished state */
 
 .home-opening .brand-mark path {
   stroke-dasharray: 1;

@@ -6,11 +6,11 @@ context. It never gives the LLM new biomechanical authority — it only shapes
 tone and focus.
 
 Two backends:
-  - **Groq-hosted `whisper-large-v3`** (default when GROQ_API_KEY is set). Cloud,
+  - Groq-hosted `whisper-large-v3` (default when GROQ_API_KEY is set). Cloud,
     fast, and more accurate than the local `small` model. Refines the original
     spec choice (local small) now that transcription quality is prioritised over
     running fully offline. Uses the same Groq account as the coaching LLM.
-  - **Local `openai-whisper`** (fallback). Offline, no API; lazily imported so
+  - Local `openai-whisper` (fallback). Offline, no API; lazily imported so
     the ~2 GB torch dependency is never forced on users who don't need it.
 
 `transcribe()` picks the Groq path when a key is present, else local, else

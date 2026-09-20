@@ -3,14 +3,14 @@
 Built on `mechanics.py` like the squat and the push-up, with two differences that
 shape the rest of the file:
 
-  - **The effort is at the top.** A squat and a push-up flex hardest at the lowest
+  - The effort is at the top. A squat and a push-up flex hardest at the lowest
     point of the body's travel, which is what `detect_bottoms` looks for. A
     pull-up flexes hardest at the highest point: on 6 of 6 Penn Action sequences
     peak elbow flexion fell at normalised travel 0.00-0.16, with 0 the top.
     Without `Movement.effort_at_top` the detector returns the dead hang between
     reps and the rep count still looks right.
 
-  - **It is filmed from the front.** Median shoulder separation across eight
+  - It is filmed from the front. Median shoulder separation across eight
     sequences was 0.34 of torso length; side-on, one shoulder sits almost on top
     of the other. The camera goes in front because the bar is overhead.
 

@@ -11,8 +11,8 @@ What differs between exercises is small and specific, so it is collected in a
 decide side visibility, what sets the body-size reference, and how a single frame
 is scored. Everything below is written against that and nothing else.
 
-The alternative was to copy `squat.py` and rename the joints, which is how you end
-up fixing the same bug twice. Extracting instead also made a genuine question
+The alternative was to copy `squat.py` and rename the joints and then fix every
+bug twice. Extracting instead made a genuine question
 answerable — whether the original design generalised — and the honest answer is
 mostly, with two exceptions worth recording:
 

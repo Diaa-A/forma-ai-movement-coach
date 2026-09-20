@@ -75,11 +75,12 @@ type Action =
   | { type: 'failed'; error: ApiError }
   | { type: 'restart' }
 
-// Where the masthead's back control goes, per screen. Absent means there is
-// nowhere sensible to go: the picker is the start, processing has a request in
-// flight, and the results and error screens carry their own way out. The
-// screens that appear here keep their own worded button as well, because "Back
-// to filming tips" says where it lands and an arrow does not.
+// Where the masthead arrow goes, per screen. Missing means there's nowhere
+// sensible: picker is the start, processing has a request in flight, results
+// and error both carry their own way out.
+//
+// These screens keep their worded button too. "Back to filming tips" says where
+// it lands, an arrow only says not forward
 const BACK_FROM: Partial<Record<Screen, Action>> = {
   guide: { type: 'restart' },
   consent: { type: 'to', screen: 'guide' },
@@ -189,9 +190,9 @@ export default function App() {
   const inFlight = useRef<{ abort: () => void } | null>(null)
   const online = useOnline()
 
-  // A new screen starts at its top. Without this a long results screen left
-  // scrolled halfway down opens the next screen halfway down as well, which
-  // reads as content missing rather than as the page being scrolled.
+  // new screen starts at its top. Leave a long results page scrolled halfway
+  // down and the next screen opens halfway down too, which reads as missing
+  // content rather than as a scrolled page
   useEffect(() => {
     window.scrollTo(0, 0)
   }, [state.screen])

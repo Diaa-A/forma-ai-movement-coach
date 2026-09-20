@@ -6,10 +6,9 @@ import type { Exercise } from '../types'
 interface Props {
   exercises: Exercise[]
   loadFailed: boolean
-  /** true the first time this screen is reached, false when coming back to it.
-   *  Replaying the opening on the way back from the filming guide read as a
-   *  stutter: the mark redrew and the sheet slid up again under a screen
-   *  transition that was already running. */
+  /** true on the first arrival, false coming back. Replaying the opening on the
+   *  way back from the guide looked like a stutter -- mark redrawing and sheet
+   *  sliding up underneath a screen transition that was already running */
   opening: boolean
   onPick: (exercise: Exercise) => void
 }
@@ -17,16 +16,15 @@ interface Props {
 /**
  * First screen, laid out for a thumb.
  *
- * The brand and the promise take the top half, where they are read once; the
- * list sits in a sheet on the bottom edge, where a hand holding a phone at the
- * gym can reach it without shifting grip. The list still comes from
- * GET /exercises rather than being written out here, so an exercise registered
- * on the backend turns up with no frontend change.
+ * Brand and promise up top where they get read once, list in a sheet on the
+ * bottom edge where a hand holding a phone at the gym actually reaches it.
  *
- * Three skeleton rows stand in while the catalogue loads. They are the same
- * height as the real rows, so the screen does not jump when it arrives — the
- * loading text that used to sit here was shorter than the list that replaced it,
- * which is half of the layout shift this screen was measured at.
+ * The list still comes from GET /exercises rather than being written out here,
+ * so registering an exercise on the backend is enough on its own.
+ *
+ * Skeleton rows while the catalogue loads, same height as the real ones. The
+ * loading text that used to sit here was shorter than the list that replaced
+ * it, and that was half the layout shift this screen measured at
  */
 export default function ExerciseSelect({ exercises, loadFailed, opening, onPick }: Props) {
   const loading = exercises.length === 0 && !loadFailed

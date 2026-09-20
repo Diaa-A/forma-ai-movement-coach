@@ -4,7 +4,7 @@ Until this landed, an accepted upload stayed on disk forever. Rejected ones were
 already cleaned up by `_discard`, which made the gap easy to miss: the failure
 path was tidy and the success path was not.
 
-**There are exactly two places a job's files live**, and that is worth stating
+There are exactly two places a job's files live, and that is worth stating
 because a sweep that misses one is a promise that is quietly false:
 
     UPLOAD_ROOT/<job_id>/   input.<ext>, voice.<ext>

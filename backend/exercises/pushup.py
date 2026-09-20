@@ -8,11 +8,11 @@ two need the same behaviour they call the same function.
 Two things genuinely differ from the squat and are worth knowing before reading
 the numbers:
 
-  - **Body scale is measured as true length, not vertical drop.** A push-up body
+  - Body scale is measured as true length, not vertical drop. A push-up body
     is horizontal, so the shoulder and ankle sit at nearly the same height and the
     squat's |dy| measure collapses to almost nothing. Shoulder-to-ankle Euclidean
     distance is the right reference.
-  - **Hip travel is smaller.** The body pivots at the toes, so the hips move a
+  - Hip travel is smaller. The body pivots at the toes, so the hips move a
     fraction of what they do in a squat. Measured across the reference clips it
     runs about 0.2-0.55 of body length, against roughly 0.45 of leg length for a
     squat, which is why the gating floors are per-movement rather than shared.

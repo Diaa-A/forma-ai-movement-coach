@@ -1,27 +1,18 @@
 import type { ReactNode } from 'react'
 
 /**
- * The app's name, on screen.
+ * The app's name on screen. A persistent strip, not a headline.
  *
- * Before this it existed only in the <title> and the manifest, so the one place
- * it never appeared was the app. It sits above every screen and is deliberately
- * smaller than the screen's own h1 — a persistent strip, not a headline.
+ * Mark is hidden from assistive tech and the wordmark is a plain div -- every
+ * screen has its own h1 already, and the results tests assert on the exact set
+ * of headings.
  *
- * The mark is the figure scripts/make_icons.py draws for the PWA icons, side on
- * at the bottom of a squat. Single-colour, unlike the icon, which picks the trunk
- * out in --bad: red means "this joint is at fault" on the overlay and in the key
- * frames, and spending it on decoration sitting next to a red failure banner
- * would wear the meaning off it.
+ * Single colour, unlike the PWA icon. --bad means "this joint is at fault" on
+ * the overlay and in the key frames; spending it on decoration next to a
+ * failure banner wears the meaning off it.
  *
- * Inline SVG because one mark does not justify an icon font or a library. The
- * screens carry the accessible structure, so the mark is hidden from assistive
- * tech and the wordmark is a plain div — every screen already has its own h1,
- * and the results screen's tests assert on the exact set of h3s present.
- *
- * `aside` rides at the right end of the row. The row's height is fixed, so the
- * install pill arriving a couple of seconds after load — Chromium fires its event
- * late — moves nothing that is already on screen. Anything the aside renders at
- * full width wraps underneath the row instead of stretching it.
+ * Row height is fixed so the install pill lands without shoving anything --
+ * Chromium offers it a second or two after load
  */
 interface Props {
   aside?: ReactNode

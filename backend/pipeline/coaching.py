@@ -7,7 +7,7 @@ requirements.txt minimal and works offline (dry-run mode) when there's no key.
 Safety contract (mirrors what the system prompt enforces):
     - LLM may rephrase the cues we provide but MUST NOT introduce new
       biomechanical claims, weights, or rep counts.
-    - **The LLM sees derived summary statistics produced by Layer 1, never raw
+    - The LLM sees derived summary statistics produced by Layer 1, never raw
       per-frame data, and never decides what is wrong.** This used to read "never
       sees raw landmarks or angles", which was half right and half not:
       `evaluation.notes` does carry derived angle values into the prompt — the

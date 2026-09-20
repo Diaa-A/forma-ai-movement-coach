@@ -1,13 +1,9 @@
 /**
- * The Forma mark at hero size.
+ * The Forma mark at hero size -- same figure the masthead carries.
  *
- * The same figure the masthead carries, drawn at 44 x 80 for the home screen.
- * Hidden from assistive tech — the wordmark beside it in the masthead already
- * says the name.
- *
- * pathLength normalises the outline to 1 so the opening animation can draw it
- * with a dash offset of 1 to 0, without anyone having to measure the real path.
- * Remove the attribute and the mark stops drawing, silently.
+ * pathLength normalises the outline to 1 so the opening can draw it from a dash
+ * offset of 1 down to 0. Take the attribute off and the mark just stops
+ * drawing, no error anywhere
  */
 export default function BrandMark() {
   return (
