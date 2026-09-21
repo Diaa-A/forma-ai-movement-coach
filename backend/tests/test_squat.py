@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 
-from backend.exercises import squat
+from backend.exercises import mechanics, squat
 from backend.pipeline.pose import LM
 
 
@@ -295,3 +295,49 @@ def test_a_set_of_uniformly_shallow_squats_all_survive():
     kept = squat.keep_real_reps(reps, hip_y, 0.35, angles_per_frame=angles,
                                 side="left", fps=30.0)
     assert len(kept) == 3
+
+
+def _knees(left, right, spine=20.0, shin=18.0):
+    return {"knee_left": left, "knee_right": right, "spine": spine,
+            "shin_left": shin, "shin_right": shin}
+
+
+def test_flag_frames_marks_the_frame_the_rep_was_judged_at():
+    """The worst key frame has to fall inside its own red window. A lower reading
+    away from the bottom used to pull the red off the frame the score picked"""
+    angles = ([_lean_frame(20, 18, knee=170.0)] * 20
+              + [_lean_frame(20, 18, knee=121.0)]      # lowest in the rep, outside the window
+              + [_lean_frame(20, 18, knee=170.0)] * 19
+              + [_lean_frame(20, 18, knee=123.0)]      # the bottom, and still shallow
+              + [_lean_frame(20, 18, knee=170.0)] * 20)
+    reps = [(0, 40, 60)]
+
+    flagged = squat.flag_frames(angles, reps, side="left", fps=30.0)
+    worst = mechanics.worst_frame(squat.SQUAT, angles, reps, "left", 30.0)
+
+    assert worst == 40
+    assert "left_knee" in flagged[worst]
+
+
+def test_flag_frames_colours_both_knees_when_they_differ():
+    """The report caught a shift onto one leg and the overlay showed nothing,
+    because the colouring had no rule for it"""
+    angles = [_knees(170, 170)] * 20 + [_knees(80, 100)] + [_knees(170, 170)] * 20
+
+    flagged = squat.flag_frames(angles, reps=[(0, 20, 40)], side="left", fps=30.0)
+
+    assert {"left_knee", "right_knee"} <= flagged[20]
+    assert "left_hip" not in flagged[20], "deep enough -- no depth mark"
+
+
+def test_flag_frames_leaves_asymmetry_alone_when_the_far_leg_is_hidden():
+    """Side-on the far leg is occluded and its angle is noise. Same gate as the cue"""
+    angles = [_knees(170, 170)] * 20 + [_knees(80, 100)] + [_knees(170, 170)] * 20
+    landmarks = np.ones((len(angles), 33, 4))
+    for name in ("right_hip", "right_knee", "right_ankle"):
+        landmarks[:, LM[name], 3] = 0.3
+
+    flagged = squat.flag_frames(angles, reps=[(0, 20, 40)], side="left", fps=30.0,
+                                landmarks=landmarks)
+
+    assert not flagged[20]

@@ -65,6 +65,11 @@ MAX_PLAUSIBLE_HIP_TRAVEL = 1.0
 # one way).
 DEPTH_FLAG_KNEE_ANGLE = 110.0
 
+# Left and right knee more than this apart at the bottom reads as a weight shift
+# to one side. Here for the same reason as the depth line -- the overlay colours
+# it too, and can't import squat_cues
+KNEE_ASYMMETRY_DEG = 10.0
+
 # The knee has to bend for a dip to count as a rep at all. Distinct from
 # DEPTH_FLAG_KNEE_ANGLE, and the distinction matters: 110 is "was the squat deep
 # enough", this is "did a squat happen".
@@ -101,7 +106,21 @@ def _knee_key(side):
     return "knee_left" if side == "left" else "knee_right"
 
 
-def flag_frames(angles_per_frame, reps, side, depth_window=8):
+def joints_visible(landmarks, frame, names, thresh=MIN_CUE_VISIBILITY):
+    """True if every named landmark at `frame` has visibility >= thresh. When no
+    landmark array is supplied, returns True (visibility gating disabled). Used to
+    suppress cues that would otherwise fire on unreliable (e.g. occluded) joints —
+    the confidence-weighting principle applied to the deterministic cue layer."""
+    if landmarks is None:
+        return True
+    try:
+        return all(landmarks[frame, LM[n], 3] >= thresh for n in names)
+    except (IndexError, KeyError):
+        return True
+
+
+def flag_frames(angles_per_frame, reps, side, fps=30.0, landmarks=None,
+                depth_window=8):
     """Which joints to draw in fault colour, PER FRAME, for the overlay video.
 
     Previously only the single worst frame was flagged, which meant one frame in
@@ -110,13 +129,19 @@ def flag_frames(angles_per_frame, reps, side, depth_window=8):
     is supposed to show *when* form breaks down, so it has to track the
     measurement frame by frame.
 
-    Two faults are marked, and only where they are actually measurable:
-      - forward lean: any valid frame where the trunk leads the shin by more than
-        LEAN_EXCESS_LIMIT. Genuinely per-frame, so the torso reddens exactly
-        while the lean is happening.
-      - shallow depth: a per-REP property, not a per-frame one, so it marks the
-        knee and hip around the deepest point of any rep that never got low
-        enough. Marking the whole rep would be wrong — the descent itself is fine.
+    Three faults, and only where they are actually measurable:
+      - forward lean, per frame: the torso reddens exactly while the trunk leads
+        the shin by more than LEAN_EXCESS_LIMIT.
+      - shallow depth, per rep: knee and hip, around the frame the rep was judged
+        at. Not the whole rep -- the descent itself is fine.
+      - left/right knee asymmetry, per rep: both knees, same frame, and only when
+        the far leg is visible enough to compare. Same gate as the cue
+
+    "The frame the rep was judged at" is the one the score and the report both
+    use, the deepest valid frame in the window round the bottom. Searching the
+    whole rep let the red drift off it: on a front-on set with some sway the worst
+    key frame landed two frames outside its own red window and came out green,
+    while the report named two faults on that same rep
 
     Frames that fail the validity gate are left unflagged rather than guessed at,
     and the renderer independently fades anything below the visibility threshold,
@@ -125,6 +150,8 @@ def flag_frames(angles_per_frame, reps, side, depth_window=8):
     out = [set() for _ in range(n)]
     shin_key = "shin_left" if side == "left" else "shin_right"
     knee_key = _knee_key(side)
+    other = "right" if side == "left" else "left"
+    other_knee = _knee_key(other)
 
     for i, ang in enumerate(angles_per_frame):
         if not frame_valid(ang, side):
@@ -137,22 +164,29 @@ def flag_frames(angles_per_frame, reps, side, depth_window=8):
             out[i] |= {"left_shoulder", "right_shoulder", "left_hip", "right_hip"}
 
     for (s, b, e) in reps:
-        deepest, knee_min = None, None
-        for i in range(max(0, s), min(n, e + 1)):
-            if not frame_valid(angles_per_frame[i], side):
-                continue
-            k = angles_per_frame[i].get(knee_key)
-            if k is None or not np.isfinite(k):
-                continue
-            if knee_min is None or k < knee_min:
-                deepest, knee_min = i, k
-        if deepest is None or knee_min <= DEPTH_FLAG_KNEE_ANGLE:
+        lo, hi = mechanics.eval_window(SQUAT, s, b, e, fps)
+        f = mechanics.deepest_frame(SQUAT, angles_per_frame, lo, hi, side)
+        if f is None:
             continue
-        lo = max(0, deepest - depth_window)
-        hi = min(n - 1, deepest + depth_window)
-        for i in range(lo, hi + 1):
+        knee = angles_per_frame[f].get(knee_key)
+        if knee is None or not np.isfinite(knee):
+            continue
+
+        joints = set()
+        if knee > DEPTH_FLAG_KNEE_ANGLE:
+            joints |= {f"{side}_knee", f"{side}_hip"}
+        k_other = angles_per_frame[f].get(other_knee)
+        if (k_other is not None and np.isfinite(k_other)
+                and abs(knee - k_other) > KNEE_ASYMMETRY_DEG
+                and joints_visible(landmarks, f, [f"{other}_hip", f"{other}_knee",
+                                                  f"{other}_ankle"])):
+            joints |= {"left_knee", "right_knee"}
+        if not joints:
+            continue
+
+        for i in range(max(0, f - depth_window), min(n - 1, f + depth_window) + 1):
             if frame_valid(angles_per_frame[i], side):
-                out[i] |= {f"{side}_knee", f"{side}_hip"}
+                out[i] |= joints
 
     return out
 

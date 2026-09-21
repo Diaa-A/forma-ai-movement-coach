@@ -94,7 +94,7 @@ def _score_frame(angle_dict, side):
     return height_pen, {"height": round(height_pen, 1)}
 
 
-def flag_frames(angles_per_frame, reps, side):
+def flag_frames(angles_per_frame, reps, side, fps=30.0, landmarks=None):
     """Which joints to draw in fault colour, per frame. None, for now.
 
     A red joint says something went wrong there, and with no calibrated height or

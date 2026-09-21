@@ -198,7 +198,7 @@ def run_pipeline(input_path, output_root, exercise: str = "squat",
     # Fault colouring for the overlay, evaluated per frame rather than only on the
     # single worst one — one red frame in six hundred is a 30th of a second and
     # reads as "nothing was ever wrong". See the exercise module.
-    flagged = spec.flag_frames(angles, reps, side)
+    flagged = spec.flag_frames(angles, reps, side, fps=fps, landmarks=lm_smooth)
 
     # -- write angles.json (with world landmarks for the Fit3D path)
     angles_path = out_dir / "angles.json"

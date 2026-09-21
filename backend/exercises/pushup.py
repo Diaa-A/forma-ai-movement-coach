@@ -137,7 +137,8 @@ def _score_frame(angle_dict, side):
     return total, {"depth": round(depth_pen, 1), "body": round(body_pen, 1)}
 
 
-def flag_frames(angles_per_frame, reps, side, depth_window=8):
+def flag_frames(angles_per_frame, reps, side, fps=30.0, landmarks=None,
+                depth_window=8):
     """Which joints to draw in fault colour, per frame, for the overlay.
 
     Follows the squat's rule: colour tracks the measurement rather than being
@@ -146,6 +147,10 @@ def flag_frames(angles_per_frame, reps, side, depth_window=8):
     segment that has bent; depth marks the elbow around the bottom of a rep that
     did not get low enough, and only around the bottom, because the descent itself
     was not the problem.
+
+    Depth is marked round the frame the rep was judged at, same as the squat, so
+    the worst key frame can't fall outside its own red window. `landmarks` is
+    accepted and unused, to keep one signature across the three exercises
     """
     n = len(angles_per_frame)
     out = [set() for _ in range(n)]
@@ -160,20 +165,14 @@ def flag_frames(angles_per_frame, reps, side, depth_window=8):
             out[i] |= {"left_hip", "right_hip", "left_shoulder", "right_shoulder"}
 
     for (s, b, e) in reps:
-        deepest, elbow_min = None, None
-        for i in range(max(0, s), min(n, e + 1)):
-            if not frame_valid(angles_per_frame[i], side):
-                continue
-            v = angles_per_frame[i].get(elbow_key)
-            if v is None or not np.isfinite(v):
-                continue
-            if elbow_min is None or v < elbow_min:
-                deepest, elbow_min = i, v
-        if deepest is None or elbow_min <= DEPTH_FLAG_ELBOW_ANGLE:
+        lo, hi = mechanics.eval_window(PUSHUP, s, b, e, fps)
+        f = mechanics.deepest_frame(PUSHUP, angles_per_frame, lo, hi, side)
+        if f is None:
             continue
-        lo = max(0, deepest - depth_window)
-        hi = min(n - 1, deepest + depth_window)
-        for i in range(lo, hi + 1):
+        v = angles_per_frame[f].get(elbow_key)
+        if v is None or not np.isfinite(v) or v <= DEPTH_FLAG_ELBOW_ANGLE:
+            continue
+        for i in range(max(0, f - depth_window), min(n - 1, f + depth_window) + 1):
             if frame_valid(angles_per_frame[i], side):
                 out[i] |= {f"{side}_elbow", f"{side}_shoulder"}
 

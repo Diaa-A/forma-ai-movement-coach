@@ -435,3 +435,18 @@ def test_only_the_pushup_merges_reps_on_the_elbow():
     assert pushup.PUSHUP.min_reopen > 0
     assert squat.SQUAT.min_reopen == 0
     assert PULLUP.min_reopen == 0
+
+
+def test_flag_frames_marks_the_frame_the_rep_was_judged_at():
+    """Same as the squat -- the red goes round the frame the score picked, so the
+    worst key frame can't come out green next to a red window"""
+    angles = ([_frame(elbow=170.0)] * 20 + [_frame(elbow=121.0)]
+              + [_frame(elbow=170.0)] * 19 + [_frame(elbow=125.0)]
+              + [_frame(elbow=170.0)] * 20)
+    reps = [(0, 40, 60)]
+
+    flagged = pushup.flag_frames(angles, reps, "left", fps=30.0)
+    worst = mechanics.worst_frame(pushup.PUSHUP, angles, reps, "left", 30.0)
+
+    assert worst == 40
+    assert "left_elbow" in flagged[worst]

@@ -16,13 +16,13 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Optional
 import numpy as np
 
-from .squat import (frame_valid, LEAN_EXCESS_LIMIT, MIN_CUE_VISIBILITY,
-                    DEPTH_FLAG_KNEE_ANGLE as _DEPTH_FLAG_KNEE_ANGLE)
+from .squat import (frame_valid, LEAN_EXCESS_LIMIT, joints_visible as _joints_visible,
+                    DEPTH_FLAG_KNEE_ANGLE as _DEPTH_FLAG_KNEE_ANGLE,
+                    KNEE_ASYMMETRY_DEG as _KNEE_ASYMMETRY_DEG)
 from .base import ExerciseProfile, SAGITTAL, FRONTAL, coverage_guidance
 # CueHit and Evaluation live in mechanics now (push-up needs them too);
 # re-exported here so existing imports of squat_cues keep working.
 from .mechanics import CueHit, Evaluation  # noqa: F401
-from ..pipeline.pose import LM
 
 
 # ----------------------------------------------------------------------------
@@ -194,7 +194,8 @@ SQUAT_POSITIVES: Dict[str, dict] = {
 # rep and cannot import this module (squat_cues imports squat, not the reverse).
 # forward lean is relative: trunk leading the shin by > LEAN_EXCESS_LIMIT
 # (imported from squat.py) flags as excessive — see that module for the rationale
-_KNEE_ASYMMETRY_DEG      =  10.0   # |knee_L - knee_R| at bottom > this => asym
+# left/right asymmetry is _KNEE_ASYMMETRY_DEG, also from squat.py, since the
+# overlay colours it as well
 _DEPTH_INCONSISTENCY_DEG =  15.0   # max-min knee at bottom across reps > this
 _FAST_DESCENT_SEC        =   0.5   # descent shorter than this => uncontrolled
 
@@ -203,19 +204,6 @@ def _knee_keys(side):
     if side == "left":
         return "knee_left", "knee_right"
     return "knee_right", "knee_left"
-
-
-def _joints_visible(landmarks, frame, names, thresh=MIN_CUE_VISIBILITY):
-    """True if every named landmark at `frame` has visibility >= thresh. When no
-    landmark array is supplied, returns True (visibility gating disabled). Used to
-    suppress cues that would otherwise fire on unreliable (e.g. occluded) joints —
-    the confidence-weighting principle applied to the deterministic cue layer."""
-    if landmarks is None:
-        return True
-    try:
-        return all(landmarks[frame, LM[n], 3] >= thresh for n in names)
-    except (IndexError, KeyError):
-        return True
 
 
 def _deepest(angles_per_frame, start, end, side):
