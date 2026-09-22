@@ -130,9 +130,10 @@ export default function Results({ result, feedbackFormUrl, onRestart }: Props) {
         <section className="card card-tight">
           <h3>Helping test this app?</h3>
           <p className="small">
-            Please fill in the short feedback form now, while the report is
-            still fresh. The link carries this analysis's reference number and
-            nothing about you.
+            There's a short survey. The first two questions ask what you
+            remember, so it works best if you leave it a while before
+            opening it — later today is fine. The link carries this
+            analysis's reference number and nothing about you.
           </p>
           <a
             className="btn"
