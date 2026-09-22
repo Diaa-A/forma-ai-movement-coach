@@ -41,7 +41,7 @@ from typing import Iterable, List, Optional
 log = logging.getLogger("coach.retention")
 
 
-RETENTION_HOURS = float(os.environ.get("RETENTION_HOURS") or 24)
+RETENTION_HOURS = float(os.environ.get("RETENTION_HOURS") or 72)
 
 # How often the background sweep runs. Well under the TTL so a job is never much
 # older than the stated period by the time it goes.

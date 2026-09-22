@@ -249,10 +249,17 @@ def test_deleting_a_job_that_is_already_gone_is_not_an_error(roots):
 
 def test_the_served_period_is_the_one_the_sweep_uses(roots):
     """The acceptance criterion: one number, not two. A frontend that states 24
-    hours while the sweep keeps 72 is the failure being designed out."""
+    hours while the sweep keeps 72 is the failure being designed out.
+
+    The note is checked against a fresh call to retention_note() rather than a
+    substring of the hour count -- that broke the moment RETENTION_HOURS moved
+    to 72 and the sentence switched to day-phrasing, which the substring check
+    never anticipated. Equality against the same function is the actual claim:
+    the served sentence and the sweep's number cannot say different things,
+    whichever way the number happens to be worded."""
     limits = routes.current_limits()
     assert limits.retention_hours == retention.RETENTION_HOURS
-    assert str(int(retention.RETENTION_HOURS)) in limits.retention_note
+    assert limits.retention_note == retention.retention_note()
 
 
 def test_the_note_reads_as_a_sentence_at_the_periods_we_might_pick():
