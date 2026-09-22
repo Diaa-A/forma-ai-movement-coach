@@ -754,6 +754,16 @@ a.btn { text-decoration: none; }
 
 /* The question, quoted back above the answer to it. Quiet, because it is the
    part the reader already knows. */
+.answer-label {
+  display: block;
+  font-family: var(--font-label);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin: 0 0 4px;
+}
+
 .asked-quote {
   margin: 0;
   font-style: italic;

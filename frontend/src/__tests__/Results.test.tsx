@@ -268,6 +268,11 @@ describe('a question asked out loud', () => {
     const card = headings[0].closest('section')!
     expect(card).toHaveTextContent(asked)
     expect(card).toHaveTextContent('Not on the last two reps.')
+
+    // the answer has its own cue -- nothing distinguished it from the question
+    // before this, and a reader scrolling past several look-alike cards had no
+    // way to tell the second paragraph was the reply
+    expect(card).toHaveTextContent(/answer/i)
   })
 
   it('keeps the quote on its own when nothing answered it', () => {

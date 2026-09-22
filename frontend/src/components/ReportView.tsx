@@ -6,7 +6,10 @@ interface Props {
    *  card rather than in one above it: two cards under the same heading, one
    *  after the other, read as a rendering fault rather than as a question and
    *  its answer. Results keeps its own card for the case where a note was left
-   *  but no answer came back. */
+   *  but no answer came back. The answer itself carries its own small label —
+   *  without one, the card read as the question followed by more question, and
+   *  a reader scrolling past several similar cards had no cue that the second
+   *  paragraph was the reply. */
   transcript?: string | null
 }
 
@@ -37,6 +40,7 @@ export default function ReportView({ report, transcript }: Props) {
               <hr className="card-rule" />
             </>
           )}
+          <p className="answer-label">Answer</p>
           <p style={{ marginBottom: 0 }}>{report.answer_to_question}</p>
         </section>
       )}
