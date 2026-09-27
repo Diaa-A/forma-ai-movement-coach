@@ -1,4 +1,4 @@
-"""Angle maths against known geometry — the Phase A definition-of-done test."""
+"""Angle maths against known geometry. The first thing that had to be right."""
 import math
 
 import numpy as np

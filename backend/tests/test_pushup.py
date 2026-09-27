@@ -1,8 +1,8 @@
 """Push-up analyser: angles, validity, cues, and the shared machinery under it.
 
 Two things these are written to protect. First the push-up's own maths, which is
-new. Second the property WP-04 exists to test: that adding a second exercise did
-not require forking the rep machinery, so a fix to one benefits both.
+new. Second the property the shared machinery exists for: that adding a second
+exercise did not require forking it, so a fix to one benefits both.
 """
 import numpy as np
 import pytest
@@ -200,9 +200,9 @@ def test_every_cue_has_a_fault_and_a_separate_fix():
 # ---------------------------------------------------------------------------
 
 def test_both_exercises_share_one_rep_filter():
-    """The point of WP-04. If these had been forked, a fix to one would silently
-    not reach the other -- which is exactly how the earlier defects would have
-    come back."""
+    """The whole point of sharing it. If these had been forked, a fix to one would
+    silently not reach the other -- which is exactly how the earlier defects
+    would have come back."""
     assert squat.keep_real_reps.__module__ == pushup.keep_real_reps.__module__ \
         or mechanics.keep_real_reps is not None
     # both delegate to the same function object
@@ -232,7 +232,7 @@ def test_body_scale_uses_true_length_for_a_horizontal_body():
 def test_registry_wires_every_exercise_completely():
     """A half-registered exercise would fail deep inside the pipeline rather than
     here, so check the entries are whole."""
-    # Updated when the pull-up landed in WP-08. The list is asserted rather than
+    # Updated when the pull-up landed. The list is asserted rather than
     # counted so that adding an exercise has to be a deliberate edit here.
     assert exercise_ids() == ["pullup", "pushup", "squat"]
     for name, spec in EXERCISES.items():

@@ -1,4 +1,4 @@
-"""The TTL sweep and the delete-now path (WP-07).
+"""The TTL sweep and the delete-now path.
 
 The thing being guarded against is a sweep that looks like it works. Deleting the
 output directory and leaving the uploaded video is worse than deleting nothing,

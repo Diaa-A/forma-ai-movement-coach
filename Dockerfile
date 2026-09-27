@@ -9,7 +9,7 @@
 # frontend/dist is gitignored, so the image builds it from source rather than
 # shipping whatever happened to be on the dev machine. That is the better half of
 # the trade: the deployed bundle is then reproducibly derived from the committed
-# source, which is what WP-12 asks for.
+# source rather than from whatever was lying around.
 #
 # NOT BUILT LOCALLY - there is no Docker on the dev machine, so Railway's first
 # build is this file's first real test. The apt step is the most likely thing to
@@ -111,8 +111,8 @@ COPY --from=frontend /build/dist ./frontend/dist
 
 # Uploads and rendered artefacts land here. On Railway this filesystem is
 # ephemeral: a redeploy wipes it and breaks any /results URL a participant still
-# has open, so do not redeploy mid-session. It is NOT a substitute for WP-07 -
-# a redeploy is an accident, not a retention policy.
+# has open, so do not redeploy mid-session. This is not the deletion guarantee -
+# that is the retention sweep. A redeploy is an accident, not a policy.
 RUN mkdir -p data/uploads data/outputs
 
 # Build-time smoke test, and it has to go deeper than an import.

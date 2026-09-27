@@ -3,9 +3,9 @@
    worth more than the lines it would save.
 
    The rule that isn't negotiable: /results/* is NEVER cached. Those are videos
-   and stills of the user's body. Decision 22 promises deletion and no retention,
-   and writing them into a device cache outside that promise would contradict the
-   consent form participants are going to sign. Storage is cheap; the guarantee
+   and stills of the user's body. The app promises deletion and no retention, and
+   writing them into a device cache outside that promise would contradict the
+   consent people give before uploading. Storage is cheap; the guarantee
    isn't. This worker simply doesn't intercept those requests.
 
    Everything else:

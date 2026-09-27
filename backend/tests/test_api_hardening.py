@@ -165,8 +165,8 @@ def test_too_short_clip_is_refused_with_the_length_that_would_work(monkeypatch):
 
 
 def test_a_rejected_clip_is_removed_rather_than_left_on_disk(monkeypatch, staging):
-    """Nothing has been analysed at this point, and until WP-07 exists nothing
-    else would ever delete it."""
+    """Nothing has been analysed at this point, so there is no reason to keep the
+    file, and the retention sweep is the only other thing that would remove it."""
     probes_as(monkeypatch, seconds=300.0)
     post()
     staged = list(staging.rglob("input.*")) if staging.exists() else []

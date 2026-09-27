@@ -1,4 +1,4 @@
-"""The faithfulness checker, and the output contract it depends on (WP-05).
+"""The faithfulness checker, and the output contract it depends on.
 
 None of this needs a network. The checker is pure, and the contract tests drive
 `generate_coaching_report` with a stubbed transport — which matters, because a
