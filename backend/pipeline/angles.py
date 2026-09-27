@@ -109,8 +109,8 @@ def _signed_body_line(shoulder, hip, ankle):
     of the hip from the shoulder-ankle line is measured instead, and signed by the
     cross product.
 
-    Returns degrees of deviation from straight, **positive when the hips are LOW
-    (sagging) and negative when they are HIGH (piked)**. Sag is the far more
+    Returns degrees of deviation from straight: positive when the hips are LOW
+    (sagging), negative when they are HIGH (piked). Sag is the far more
     common fault, so it gets the positive direction. Expressed as an angle rather
     than a distance so it does not change meaning with camera distance.
 

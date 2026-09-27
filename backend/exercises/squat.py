@@ -1,14 +1,14 @@
 """Squat-specific analysis — phase boundaries, rep validity, form scoring.
 
-Phase B implementation . Form scoring follows these biomechanical standards:
+Form scoring follows these biomechanical standards:
     - Knee at bottom should reach ~90° (parallel). Deeper is fine if mobility
       allows — only "not deep enough" is a fault.
     - Spine should stay >45° from horizontal, i.e. forward lean from vertical
       should stay UNDER 45°. More lean = more spinal load.
 
-Phase C will swap the score-then-rank approach below for the deterministic
-safety layer (a structured cue database mapping deviations to expert-vetted
-coaching cues). For now this gives Phase B usable worst/best frame selection.
+The score below only ranks reps against each other, which is how the worst and
+best frame get picked. What is actually wrong with a set is decided separately,
+by the cue database in squat_cues.py -- a score is a number, not a fault.
 """
 import numpy as np
 from ..pipeline.pose import LM, VISIBILITY_THRESHOLD
@@ -40,8 +40,8 @@ LEAN_EXCESS_LIMIT = 15.0        # degrees the trunk may lead the shin before fla
 # 0.95+, so the cut sits in the gap).
 MIN_CUE_VISIBILITY = VISIBILITY_THRESHOLD
 
-# Score component weights — kept simple and tweakable. Phase C cue database will
-# absorb this anyway.
+# Score component weights — kept simple and tweakable. Only used for ranking;
+# the cue database is what decides a fault.
 W_DEPTH = 1.0
 W_SPINE = 1.0
 

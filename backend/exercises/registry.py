@@ -27,7 +27,7 @@ class ExerciseSpec:
     """Everything the pipeline needs to analyse one exercise.
 
     The runner reads this and nothing else, which is what keeps exercise names out
-    of `pipeline/`. That was WP-04's acceptance criterion and it is the part worth
+    of `pipeline/`. That is the whole point of the split and it is the part worth
     checking: if a name had leaked, this indirection would be pointless.
     """
     profile: ExerciseProfile

@@ -1,9 +1,6 @@
 /* One stylesheet, custom properties for the palette. No framework — there are
    about fifteen components here and the config needed to avoid writing this
-   would be longer than the CSS itself.
-
-   Palette derivation, contrast measurements and the reasoning behind every
-   number below: docs/UI_DESIGN_PLAN.md. */
+   would be longer than the CSS itself. */
 
 /* ---- fonts ---------------------------------------------------------- */
 
@@ -527,9 +524,9 @@ a.btn { text-decoration: none; }
 
 .keyframe figcaption { margin-top: 6px; }
 
-/* The filming tip is generated deterministically, never by the language model
-   (Decision 23). Giving it a different edge keeps that distinction visible
-   instead of letting it blend into the coaching prose. */
+/* The filming tip is generated deterministically, never by the language model.
+   Giving it a different edge keeps that distinction visible instead of letting
+   it blend into the coaching prose. */
 .filming-tip { border-left: 4px solid var(--accent); }
 
 .provenance {

@@ -195,7 +195,7 @@ describe('the feedback-form link', () => {
 
 describe('deleting an analysis now', () => {
   // The consent copy promises this, so it has to be a working button. The
-  // endpoint is WP-07's DELETE /jobs/{id}; this screen is the only caller.
+  // endpoint is DELETE /jobs/{id}; this screen is the only caller.
   afterEach(() => vi.unstubAllGlobals())
 
   function stubDelete(response: Partial<Response>) {

@@ -57,7 +57,7 @@ ALLOWED_VIDEO_SUFFIXES = {".mp4", ".mov", ".webm", ".m4v"}
 ALLOWED_AUDIO_SUFFIXES = {".wav", ".mp3", ".m4a", ".mp4", ".webm", ".ogg"}
 # derived from the profile registry, not written out again here — one list means
 # the allowlist and the exercise picker can't drift apart. push-up / pull-up
-# arrive by registering their profile (Phase G).
+# arrive by registering their profile.
 ALLOWED_EXERCISES = set(PROFILES)
 
 # Hard band the server refuses outside of. The spec asks for 5-30 s, which is the
@@ -143,7 +143,7 @@ def _discard(upload_dir: Path):
     Rejections used to leave the video on disk: the audio suffix is checked after
     the video has been written, so a bad voice-note extension cost a full upload
     and left it there. Nothing has been analysed at these points, so there is no
-    reason to keep the file — and until WP-07 ships there is nothing else that
+    reason to keep the file, and the retention sweep is the only other thing that
     would ever remove it.
     """
     shutil.rmtree(upload_dir, ignore_errors=True)

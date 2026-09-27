@@ -28,13 +28,14 @@ than trusting the file to be what it is named.
 
 Nothing decodes here, on purpose. An earlier version called `cap.read()` to
 confirm a frame actually came out, which is the stronger test, and on
-requirements.txt that call **hangs indefinitely** rather than failing. A probe
+requirements.txt that call hangs indefinitely rather than failing. A probe
 that can hang is worse than the problem it was added for.
 
 Since the pipeline decodes with that same call, a file that got past this check
 while not really being video could still hang a request. Nothing in the fixtures
 manages it, but the check is metadata and metadata can lie. The bound for that is
-a request timeout at the serving layer, which belongs to deployment (WP-03).
+a request timeout at the serving layer, which is a deployment setting rather
+than anything this module can reach.
 
 `seconds` is None when the container will not say. The caller lets those through
 rather than refusing on a number it does not have; refusing would reject valid

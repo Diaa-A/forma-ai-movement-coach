@@ -1,9 +1,9 @@
-"""Measure what a deployed container actually costs, cold and warm (WP-03).
+"""Measure what a deployed container actually costs, cold and warm.
 
 Run this against the deployed URL, not against localhost — the number that
 matters is the one a phone on mobile data sees.
 
-**Measure the right thing.** An earlier version of the project documentation said
+Measure the right thing. An earlier version of the project documentation said
 roughly 9.5 s of a run was MediaPipe model loading, and that was wrong. Measured
 on the reference clip, `PoseLandmarker.create_from_options` costs 0.23 s on the
 first call and 0.07 s afterwards, which is about 2.5% of the pose stage; the rest

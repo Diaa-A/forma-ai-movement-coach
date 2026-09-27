@@ -1,4 +1,4 @@
-"""Whisper voice-note transcription — Phase D.
+"""Whisper voice-note transcription.
 
 Transcribes a short user voice note (a separate recording where the user states
 goals / pain points) into text that feeds the Layer 2 coaching prompt as

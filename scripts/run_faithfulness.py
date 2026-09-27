@@ -1,18 +1,18 @@
-"""Measure Layer-2 faithfulness against Layer-1 (WP-05).
+"""Measure Layer-2 faithfulness against Layer-1.
 
     python scripts/run_faithfulness.py --runs 12
 
 Needs GROQ_API_KEY. Writes `data/outputs/faithfulness/` — a machine-readable
 `results.json`, a summary table, and a figure for the report.
 
-**Why the pipeline runs once per clip and the model runs many times.** The
+Why the pipeline runs once per clip and the model runs many times: the
 pipeline is deterministic: analysing the same clip twice gives the same
 `Evaluation`, so re-running it would cost twelve seconds a go and add no
 variance. What varies is the model, at temperature 0.4. So each clip is analysed
 once, its Layer-1 evaluation is cached, and only the Layer-2 call repeats. The
 cache also means a re-run of this harness needs no video at all.
 
-**The case set is deliberately adversarial**, because a harness that returns 100%
+The case set is deliberately adversarial, because a harness that returns 100%
 on the easy cases has not been made to work. Alongside ordinary faulted sets it
 includes a clean set where Layer 1 found nothing wrong (does the model invent a
 fault to have something to say?), a set where only a secondary cue fired (does it

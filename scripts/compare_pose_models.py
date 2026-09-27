@@ -7,12 +7,12 @@ the same dataset. Nothing in the analysis path changes: this imports the existin
 evaluation harness and the pipeline's own filter, and only varies what is being
 compared.
 
-**Model.** pose_landmarker_full against pose_landmarker_lite, both actions, the
+Model: pose_landmarker_full against pose_landmarker_lite, both actions, the
 same 25 sequences and the same frame stride the published benchmark used. The
 full column should therefore reproduce the committed numbers exactly, which is
 the check that this harness is measuring the same thing.
 
-**One Euro filter.** The benchmark deliberately runs each frame independently -
+One Euro filter: the benchmark deliberately runs each frame independently -
 `extract_landmarks_from_frames` exists so pose accuracy is measured without a
 temporal-smoothing confound - so the filter has never been measured against
 ground truth at all. Here it is, by running pose once per action and scoring the
@@ -22,11 +22,11 @@ arms, so detection rate cannot move and the only difference is the smoothing.
 
 Two things to know about the filter arm:
 
-  - It runs at **stride 1**. One Euro is frame-rate dependent, and the pipeline
+  - It runs at stride 1. One Euro is frame-rate dependent, and the pipeline
     sees every frame, so scoring it on every other frame would measure a filter
     the product does not run.
   - Penn Action labels carry no frame rate, so timestamps are synthesised at a
-    nominal **30 fps**. The filter's tuning assumes roughly that. A real rate
+    nominal 30 fps. The filter's tuning assumes roughly that. A real rate
     that differs would shift the smoothing, and this is the one assumption in
     the ablation that cannot be checked from the data.
 """

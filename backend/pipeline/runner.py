@@ -6,8 +6,8 @@ CLI. Both call `run_pipeline()` and get back the same artefacts.
 Nothing here knows what a squat or a push-up is. Which angles to compute, how to
 decide a rep happened, which cues to fire and which joints to colour all arrive
 through the registry entry for the requested exercise. Adding an exercise is a
-registration, not an edit to this file -- which was the point of WP-04, and is
-easy to check: there is no exercise name below the imports.
+registration, not an edit to this file -- which was the point of it, and is easy
+to check: there is no exercise name below the imports.
 """
 from __future__ import annotations
 
@@ -263,7 +263,7 @@ def run_pipeline(input_path, output_root, exercise: str = "squat",
     summary["status"] = status
     summary["detection_rate"] = round(detection_rate, 3)
 
-    # -- voice transcription (optional) + Phase C coaching
+    # -- voice transcription (optional) + coaching
     coaching_path = None
     if options.coach:
         if status != "ok":

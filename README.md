@@ -1,54 +1,59 @@
 # Forma — AI Fitness & Movement Coach
 
-CM3070 final project — server-side Python pipeline that analyses a user-uploaded
-exercise video and returns coaching feedback. The PWA ships as **Forma**.
+Film one set of a squat, push-up or pull-up on your phone, upload it, and get back
+what your form looked like: the clip with a skeleton drawn on it, the best and
+worst frames picked out, and written feedback on what to change.
 
-**Start here:** the Status table below for what is built, then Quick start to get
-it running. Architecture is in section 2 of this file and the reasoning behind
-each design choice is in the report rather than the repository.
+This is my CM3070 final project. The code here is the whole thing — the analysis
+pipeline, the web app, and the harnesses that measure how well it works.
 
-## Status
+## How it works
 
-| Phase | Status |
-|---|---|
-| A — pipeline foundation (MediaPipe → One Euro → angles → phase detection) | done |
-| B — squat analyser (form scoring, worst/best frame selection, false-rep filter) | done |
-| C — two-layer coaching (Layer 1 deterministic cue evaluator + Layer 2 Groq LLM, with dry-run fallback) | done; live (Groq key in `.env`) |
-| D — voice transcription (Groq `whisper-large-v3` default, local `openai-whisper` fallback) | done; live |
-| E — FastAPI server with `/analyze` multipart endpoint | done |
-| F — PWA frontend | done; deployed on Railway and installable on iOS |
-| G — push-up / pull-up analysers | done and benchmarked; the pull-up has one live cue and declares the rest as not assessed yet (WP-08) |
-| H — Penn Action evaluation harness | done, squat, push-up and pull-up |
-| I — user testing round 1 | done; six unique form responses on the demo build |
+An uploaded clip goes through the same steps whichever exercise it is:
+
+1. MediaPipe Pose finds 33 body landmarks in every frame.
+2. A One Euro filter smooths them, because raw landmarks jitter enough to ruin an
+   angle.
+3. Joint angles are worked out from the landmarks in 2D.
+4. Repetitions are found by looking for where the body changes direction.
+5. A set of fixed rules decides what was wrong with the set.
+6. A language model rewrites that decision in plainer words.
+
+Step 5 and step 6 are deliberately separate, and that split is the point of the
+project. The rules decide; the model only rephrases. It never sees the video or
+the frame-by-frame numbers, so it cannot invent a fault the rules did not find.
+There is a checker in `backend/evaluation/` that measures whether the model stayed
+inside what the rules gave it.
+
+The app also says what it did *not* check. If you film a squat from the side it
+cannot see whether your knees cave inward, so it says so rather than staying
+quiet and letting you assume it looked.
+
+## What it checks
+
+| Exercise | Film from | Checks | Does not check yet |
+|---|---|---|---|
+| Squat | the side | depth, forward lean, hip drive out of the bottom, left/right evenness, rep consistency, descent speed | knee tracking, whether the heels stay down |
+| Push-up | the side | depth, sagging hips, piked hips, left/right evenness, rep consistency, descent speed | elbow flare, head and neck position |
+| Pull-up | the front | rep counting, and whether every rep reaches the same height | whether the arms straighten at the bottom, chin height, swing, arm evenness |
+
+The pull-up is thinner than the other two on purpose. It has to be filmed from the
+front, because the bar is overhead, and that view cannot see the things that make a
+pull-up correct. Rather than guess, the other four checks are switched off and
+declared.
+
+Everything is built, deployed, and tested on a phone. One round of user testing has
+run, and a second on the finished build.
 
 ## Quick start
 
-Run Setup first. `PY` below is your venv interpreter — see
-[Which interpreter to type](#which-interpreter-to-type).
-
-### CLI
-
-```
-PY analyze_squat.py --input data/test_videos/squat.mp4
-```
-
-Useful flags:
-- `--model {lite,full,heavy}` — MediaPipe model size (default full)
-- `--no-coach` — skip Layer 1 + 2 (analysis only)
-- `--dry-run-coach` — force deterministic report (no LLM call)
-- `--voice-note <audio>` — transcribe via Whisper, pass to LLM as context
-- `--voice-note-text "..."` — same but plain text (no Whisper needed)
-
-Outputs go to `data/outputs/<job_id>/`:
-- `annotated.mp4` — clip with skeleton overlay, colour-coded
-- `worst.jpg`, `best.jpg` — annotated key frames
-- `angles.json` — per-frame joint angles, phase labels, rep stats, world landmarks
-- `coaching.json` — Layer 1 evaluation + Layer 2 report
+Do the [Setup](#setup) first. `PY` below means your virtual environment's
+interpreter — there is a table under [Which interpreter to type](#which-interpreter-to-type).
 
 ### The app
 
-Build the frontend once (needs Node 18+), then start the server — it serves the
-PWA and the API from the same origin, so there is only one thing to run:
+Build the frontend once, then start the server. The server hands out the web app
+and answers the API on the same port, so there is only one thing to run.
 
 ```
 cd frontend && npm install && npm run build && cd ..
@@ -58,32 +63,60 @@ cd frontend && npm install && npm run build && cd ..
 PY -m uvicorn backend.main:app --host 0.0.0.0 --port 8000
 ```
 
-Open http://127.0.0.1:8000. Binding to `0.0.0.0` also lets a phone on the same
-network reach it at `http://<your-ip>:8000` — everything works there except
-recording a voice note, which needs `getUserMedia` and therefore HTTPS. Typing
-the note works, and so does everything else, because video capture uses a file
-input rather than a media stream. For the full journey over HTTPS without
-deploying, tunnel it: `cloudflared tunnel --url http://localhost:8000`.
+Open http://127.0.0.1:8000.
 
-For frontend work, `npm run dev` in `frontend/` gives hot reload on
-http://localhost:5173 and proxies API calls to port 8000. Frontend tests:
-`npm test`.
+Binding to `0.0.0.0` also lets a phone on the same wifi reach it at
+`http://<your-ip>:8000`. Everything works there except recording a voice note,
+which browsers only allow over HTTPS. Typing the note instead works fine, and so
+does picking a video, because that uses a normal file input. If you want the whole
+thing over HTTPS without deploying it, tunnel it:
 
-### API on its own
+```
+cloudflared tunnel --url http://localhost:8000
+```
+
+For frontend work, `npm run dev` inside `frontend/` gives hot reload on
+http://localhost:5173 and forwards API calls to port 8000.
+
+### Command line
+
+One clip, no web app:
+
+```
+PY analyze_squat.py --input data/test_videos/squat.mp4
+```
+
+Flags worth knowing:
+
+- `--exercise {squat,pushup,pullup}` — which analyser to run, squat by default
+- `--model {lite,full,heavy}` — MediaPipe model size, `full` by default
+- `--no-coach` — analyse only, write no feedback
+- `--dry-run-coach` — write the feedback from the rules alone, no model call
+- `--voice-note <audio>` — transcribe a spoken question and answer it
+- `--voice-note-text "..."` — the same, typed, so no transcription is needed
+
+Results land in `data/outputs/<job_id>/`:
+
+- `annotated.mp4` — the clip with the skeleton drawn on, red where something is wrong
+- `worst.jpg`, `best.jpg` — the two frames worth looking at
+- `angles.json` — per-frame angles, rep boundaries, which frame each rep was judged at
+- `coaching.json` — what the rules decided, and the written feedback
+
+### The API on its own
 
 ```
 PY -m uvicorn backend.main:app --reload --port 8000
 ```
 
-Without a frontend build present, `/` returns the endpoint list instead of the app.
+With no frontend build present, `/` lists the endpoints instead of serving the app.
+Those are `POST /analyze`, `GET /exercises`, `DELETE /jobs/{id}`, `GET /health`,
+and the finished files under `GET /results/<job_id>/<file>`.
 
-Then, on one line so it works in cmd, PowerShell and a POSIX shell alike:
+Sending a clip, on one line so it works in cmd, PowerShell and a POSIX shell alike:
 
 ```
 curl -F "video=@data/test_videos/squat.mp4" -F "exercise_type=squat" -F "dry_run_coach=true" http://127.0.0.1:8000/analyze
 ```
-
-Returns JSON with URLs to artefacts served from `/results/<job_id>/`.
 
 ### Tests
 
@@ -91,95 +124,20 @@ Returns JSON with URLs to artefacts served from `/results/<job_id>/`.
 PY -m pytest
 ```
 
-294 tests: angle maths vs known geometry, One Euro behaviour, phase detection on
-synthetic signals, rep filter, cue gating, the API's rejection branches, and an
-end-to-end smoke test (the tests that need `data/test_videos/` skip themselves on
-a clean checkout, where test videos are gitignored — a skip there is expected,
-not a failure).
+294 tests: angle maths against geometry worked out by hand, the filter, rep
+detection on made-up signals, every cue firing and staying quiet, every way the API
+can reject an upload, and a few that run a real clip end to end. Nine of them skip on a
+fresh clone, five because the clips they need are gitignored and four because they
+want the ffmpeg binary. A skip there is expected and not a failure.
 
-### Pexels fixture fetcher
-
-```
-PY scripts/fetch_pexels.py --query "squat" --count 5
-```
-
-Requires `PEXELS_API_KEY` in `.env`. Pulls CC0 clips into
-`data/test_videos/pexels/<query>/` with a `SOURCE.txt` manifest holding the
-licence + photographer credits.
-
-## Deployment (Railway)
-
-The `Dockerfile` builds the PWA and the API into one image, because the backend
-serves the frontend so they share an origin. Railway detects it automatically;
-`railway.json` sets the healthcheck to `/health`.
-
-**Why Railway.** The binding constraint is request duration, not price: a 20 s
-clip takes ~12 s to analyse and a 4K one takes longer, so any host with a 30 s
-request cap is unusable. Railway allows 5 minutes on public networking. Measured
-usage is ~0.1 GB idle and 238–774 MB peak per analysis depending on input
-resolution. On the original 954 MB container that came to roughly $1/month at
-Railway's published per-second rates, inside the $5 Hobby credit. The container
-was resized during Round 1 after repeated analyses ran it out of memory, so
-treat that figure as the old one and read the current rate off the dashboard
-before quoting it anywhere.
-
-### First deploy
-
-1. Create a Railway account, then **New Project → Deploy from GitHub repo** and
-   pick this repository. It is private, so you will be asked to grant access —
-   keep the repository private (it is assessed coursework).
-2. Railway reads `railway.json` and `Dockerfile`; no build settings to fill in.
-3. Under **Variables**, add `GROQ_API_KEY` and `GROQ_MODEL`. The model is not
-   optional any more — Groq retired `llama-3.3-70b-versatile` in Aug 2026, and
-   without an override coaching quietly falls back to cue wording while
-   `/health` still reports green. `openai/gpt-oss-120b` is what production
-   runs. Add `FEEDBACK_FORM_URL` only while a testing round is open. CORS
-   stays empty on purpose (the app and the API share an origin, so nothing is
-   ever cross-origin), and `DATA_ROOT` defaults to `data/` inside the image.
-   Railway needs a redeploy to pick up a variable change.
-4. Under **Settings → Networking**, generate a domain. HTTPS is issued
-   automatically, which the PWA needs for install and for `MediaRecorder`.
-5. Set a **usage limit** in account settings. Hobby is billed by usage with no
-   hard cap, and a runaway loop should stop rather than bill.
-
-`.env` is gitignored and is never copied into the image — `.dockerignore`
-excludes it as well, so neither path can carry a key.
-
-### Measuring cold and warm latency
-
-WP-03 asks for this and it becomes a figure in the Implementation chapter. Run it
-immediately after triggering a deploy so the boot number means something:
-
-```
-PY scripts/measure_deploy_latency.py https://<your-app>.up.railway.app \
-    --wait-for-boot --runs 3 --out data/outputs/deploy_latency.json
-```
-
-Note what cold start actually consists of here: container boot, Python import
-(~0.5 s, mostly MediaPipe), and first-call delegate init (0.23 s). It is **not**
-model loading — an earlier version of the project notes claimed ~9.5 s went there
-and that was wrong, and it would point any optimisation at the wrong thing.
-Per-frame inference dominates and does not get cheaper on a warm container.
-
-### Two things to know before a testing session
-
-- **The filesystem is ephemeral.** A redeploy wipes `data/outputs`, so any
-  `/results/...` URL a participant still has open stops working. Do not redeploy
-  mid-session. This is not the deletion guarantee either — that is WP-07, and it
-  has to ship before anyone is asked to consent to it.
-- **One analysis runs at a time** (`MAX_CONCURRENT_ANALYSES`, default 1). Past
-  the limit requests get a 503, which the app renders as a retryable server
-  error. The default was chosen when the container had 954 MB against a
-  238–774 MB peak per analysis, so two large ones could not fit. `/health` now
-  reports a 7,629 MB limit, so memory no longer forces the value down to 1 — it
-  stays there because nothing has yet measured what raising it does to latency
-  under load.
+The frontend has 86 of its own. `npm test` inside `frontend/`.
 
 ## Setup
 
-Requires **Python 3.13** and about 1 GB of disk for the virtual environment.
+Needs Python 3.13 and about 1 GB of disk for the virtual environment. Node 18 or
+newer for the frontend build.
 
-**Windows** (PowerShell or cmd):
+Windows, in PowerShell or cmd:
 
 ```
 py -3.13 -m venv .venv
@@ -188,7 +146,7 @@ py -3.13 -m venv .venv
 copy .env.example .env
 ```
 
-**macOS / Linux**:
+macOS and Linux:
 
 ```
 python3.13 -m venv .venv
@@ -197,108 +155,155 @@ python3.13 -m venv .venv
 cp .env.example .env
 ```
 
-Then open `.env` and fill in the keys — `.env.example` documents every variable
-and why it exists, including the ones not listed here:
-- `GROQ_API_KEY` — Phase C live LLM and Phase D transcription. The system runs
-  without it: pass `--dry-run-coach` and you get the deterministic report instead.
-- `GROQ_MODEL` — set this. The measured default was retired upstream; production
-  runs `openai/gpt-oss-120b`. Rerun `scripts/run_faithfulness.py` before
-  trusting a model the report has not measured.
-- `PEXELS_API_KEY` — only needed for the fixture fetcher.
+Then open `.env` and fill it in. Every variable is documented in `.env.example`;
+these are the ones that matter:
+
+- `GROQ_API_KEY` — the language model and the voice transcription. The app runs
+  without it: pass `--dry-run-coach`, or let it fall back on its own, and you get
+  the feedback the rules wrote.
+- `GROQ_MODEL` — set this one. Groq retired the model the project was measured
+  against in August 2026, and without an override the feedback quietly falls back
+  to the rules' own wording. Production runs `openai/gpt-oss-120b`.
+- `PEXELS_API_KEY` — only for the fixture downloader.
 
 ### Why Python 3.13 and not the 3.11 in the spec
 
-Deliberate, not a workaround. MediaPipe 0.10.35 publishes CPython 3.13 wheels, so
-every pinned dependency in `requirements.txt` installs as a prebuilt wheel on
-Windows, macOS and Linux with no compiler step — which matters a lot more for
-"can someone else run this" than the minor version does. The whole pinned stack
-was built and validated on 3.13. (What raised the question was a broken 3.11.0
-install on the dev machine; what settled it was the wheel coverage.)
+A deliberate choice, not a workaround. MediaPipe 0.10.35 publishes wheels for 3.13,
+so everything in `requirements.txt` installs prebuilt on Windows, macOS and Linux
+with no compiler involved. That matters more for whether someone else can run this
+than the minor version does. The pinned set was built and tested on 3.13
+throughout. A broken 3.11 install is what raised the question; the wheels are what
+settled it.
 
 ### Which interpreter to type
 
-The rest of this README writes the interpreter as **`PY`**:
+The rest of this file writes the interpreter as `PY`:
 
 | Platform | `PY` is |
 |---|---|
 | Windows | `.venv\Scripts\python.exe` |
 | macOS / Linux | `.venv/bin/python` |
 
-Forward slashes in the *arguments* work everywhere — Python normalises them — so
-only the interpreter path differs.
+Forward slashes in the arguments are fine everywhere, since Python sorts them out.
+Only the interpreter path differs.
 
-### Optional: local voice transcription fallback
+### Optional: transcription without the network
 
 ```
 PY -m pip install openai-whisper
 ```
 
-Pulls in torch (~2 GB on CPU). Not needed in normal use: transcription defaults to
-Groq-hosted `whisper-large-v3`. This is the offline fallback only.
+This pulls in torch, about 2 GB. You do not need it in normal use — transcription
+goes to Groq by default. It is the offline fallback.
 
-## File layout
+## Deployment
+
+The `Dockerfile` builds the web app and the API into one image, since the backend
+serves the frontend and they share an origin. `railway.json` points the healthcheck
+at `/health`.
+
+It runs on Railway because the deciding constraint is how long a request may take,
+not price. A 20-second clip takes about 12 seconds to analyse and a 4K one takes
+longer, so any host that cuts requests off at 30 seconds is no use. Railway allows
+five minutes. Memory runs about 0.1 GB idle and peaks between 238 MB and 774 MB per
+analysis depending on the resolution coming in.
+
+Setting it up the first time:
+
+1. New project, deploy from this GitHub repo.
+2. Railway reads `railway.json` and the `Dockerfile`. There are no build settings
+   to fill in.
+3. Under Variables, add `GROQ_API_KEY` and `GROQ_MODEL`. Add `FEEDBACK_FORM_URL`
+   only while a round of user testing is open. Leave CORS empty — the app and the
+   API share an origin, so nothing is ever cross-origin. A variable change needs a
+   redeploy to take effect.
+4. Under Settings, Networking, generate a domain. HTTPS comes with it, which the
+   app needs to install to a home screen and to record a voice note.
+5. Set a usage limit in your account settings, so a runaway loop stops instead of
+   billing.
+
+`.env` is gitignored and never goes into the image — `.dockerignore` excludes it
+too, so neither path can carry a key.
+
+### Two things to know before a testing session
+
+The filesystem does not survive a redeploy. Anything under `data/outputs` is gone,
+so a `/results/...` link someone still has open stops working. Don't redeploy while
+people are using it.
+
+Separately, uploads and results are deleted on a timer: `RETENTION_HOURS`, three
+days by default. The app shows that period on screen before anything is uploaded,
+and reads it from the same place the deleting code does, so the two cannot drift
+apart. There is also a delete button that removes one analysis straight away.
+
+Three analyses run at once, set by `MAX_CONCURRENT_ANALYSES`. A fourth at the same
+moment gets a 503, which the app shows as a server error worth retrying. The limit
+used to be one, back when the container had 954 MB against a peak of up to 774 MB
+per analysis. The container is larger now, so three fit.
+
+## Where things are
 
 ```
 .
 ├── README.md                  this file
-├── analyze_squat.py           CLI entry
-├── .env.example
+├── analyze_squat.py           command-line entry point
+├── .env.example               every environment variable, with why it exists
 ├── requirements.txt
 ├── backend/
-│   ├── main.py                FastAPI app
+│   ├── main.py                the FastAPI app
 │   ├── api/
-│   │   ├── routes.py          POST /analyze
-│   │   └── schemas.py         response models
+│   │   ├── routes.py          /analyze, /exercises, /jobs/{id}
+│   │   ├── retention.py       deletes uploads and results on a timer
+│   │   └── schemas.py         response shapes
 │   ├── pipeline/
-│   │   ├── runner.py          shared orchestrator (CLI + API both use this)
-│   │   ├── pose.py            MediaPipe Pose wrapper
+│   │   ├── runner.py          runs a clip end to end; the CLI and API share it
+│   │   ├── pose.py            MediaPipe wrapper
 │   │   ├── filter.py          One Euro filter (Casiez 2012)
-│   │   ├── angles.py          joint angle calcs
-│   │   ├── phase_detection.py velocity zero-crossing + phase labels
-│   │   ├── render.py          skeleton overlay
-│   │   ├── encoder.py         browser-playable MP4 muxing
-│   │   ├── probe.py           reads rotation / duration before decoding
-│   │   ├── coaching.py        Layer 2 — Groq LLM wrapper + dry-run
-│   │   └── whisper_wrapper.py Phase D voice transcription (lazy)
-│   ├── evaluation/            Penn Action loader, MPJPE / PCK, faithfulness checker
+│   │   ├── angles.py          joint angles
+│   │   ├── phase_detection.py finds reps and labels the parts of one
+│   │   ├── render.py          draws the skeleton
+│   │   ├── encoder.py         muxes an MP4 a browser will actually play
+│   │   ├── probe.py           reads rotation and duration before decoding
+│   │   ├── coaching.py        the language model wrapper, and the fallback
+│   │   └── whisper_wrapper.py voice transcription, loaded only when used
+│   ├── evaluation/            the pose benchmark, and the faithfulness checker
 │   ├── exercises/
-│   │   ├── base.py            ExerciseProfile — camera-view / plane gating
-│   │   ├── mechanics.py       shared Movement abstraction (no exercise names here)
-│   │   ├── registry.py        exercise lookup by name
-│   │   ├── squat.py           form scoring + side selection + worst/best
-│   │   ├── squat_cues.py      Layer 1 — squat cue database + evaluator
-│   │   ├── pushup.py          push-up scoring on the shared Movement
-│   │   ├── pushup_cues.py     Layer 1 — push-up cue database + evaluator
-│   │   ├── pullup.py          pull-up scoring, both arms, effort at the top
-│   │   └── pullup_cues.py     Layer 1 — pull-up cues, four of five parked
-│   └── tests/                 294 pytest tests
-├── frontend/                  the PWA (React + Vite); built output is served by FastAPI
+│   │   ├── mechanics.py       the machinery all three share
+│   │   ├── base.py            what each exercise's camera view can and cannot see
+│   │   ├── registry.py        look an exercise up by name
+│   │   ├── squat.py           scoring, side selection, key frames, overlay colours
+│   │   ├── squat_cues.py      the squat's rules
+│   │   ├── pushup.py          the same for the push-up
+│   │   ├── pushup_cues.py     the push-up's rules
+│   │   ├── pullup.py          the same for the pull-up, scored on both arms
+│   │   └── pullup_cues.py     the pull-up's rules, four of five switched off
+│   └── tests/                 294 tests
+├── frontend/                  the web app (React + Vite), built and served by FastAPI
 │   ├── public/                manifest, service worker, icons
 │   └── src/
-│       ├── api.ts             the only module that talks to the backend
-│       ├── consent.ts         per-device consent, keyed to the retention period
-│       ├── motion.ts          view transitions + stagger, no animation library
-│       ├── screens/           intro → select → consent → guide → capture →
-│       │                      processing → results
-│       └── components/        masthead, stepper, status banner, report view
-├── scripts/                   18 harnesses and figure builders; the ones used most:
-│   ├── eval_penn_action.py    Phase H benchmark harness
-│   ├── run_faithfulness.py    Layer-2 faithfulness measurement (spends Groq quota)
-│   ├── rescore_faithfulness.py  re-score stored generations offline, no quota
-│   └── fetch_pexels.py        CC0 fixture downloader
+│       ├── api.ts             the only file that talks to the backend
+│       ├── consent.ts         consent per device, tied to the retention period
+│       ├── screens/           intro, pick an exercise, consent, how to film,
+│       │                      upload, processing, results
+│       └── components/        masthead, stepper, banners, the report itself
+├── scripts/                   18 measurement harnesses and figure builders
+│   ├── eval_penn_action.py    pose accuracy against a labelled dataset
+│   ├── run_faithfulness.py    does the model only say what the rules gave it
+│   ├── rescore_faithfulness.py  re-score a stored run offline, no API quota
+│   └── fetch_pexels.py        downloads test clips from Pexels
 └── data/
-    ├── models/                MediaPipe .task files (lite + full)
-    ├── test_videos/           input clips (gitignored)
-    ├── uploads/               API multipart uploads (gitignored)
-    └── outputs/               per-job artefacts (gitignored)
+    ├── models/                the MediaPipe model files
+    ├── test_videos/           input clips (gitignored, except the credits)
+    ├── uploads/               what the API receives (gitignored)
+    └── outputs/               per-analysis results (gitignored)
 ```
 
 ## Licence
 
-MIT, see `LICENSE`.
+MIT. See `LICENSE`.
 
-The MediaPipe pose models in `data/models/` are Google's, distributed under the
-Apache License 2.0, and are not covered by the above. Test clips are not in the
-repository; the Pexels footage used for evaluation is free to use with
-attribution recommended, and `data/test_videos/pexels/<query>/SOURCE.txt`
-records where each one came from.
+Two things in here are not mine. The MediaPipe pose models under `data/models/` are
+Google's, under the Apache License 2.0. The test clips are from Pexels, which is
+free to use with attribution recommended; the clips themselves are gitignored, and
+`data/test_videos/pexels/<query>/SOURCE.txt` records the link and the photographer
+for every one of them.

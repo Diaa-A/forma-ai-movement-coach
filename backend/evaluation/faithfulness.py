@@ -1,4 +1,4 @@
-"""Does Layer 2 only say what Layer 1 gave it? (WP-05)
+"""Does Layer 2 only say what Layer 1 gave it?
 
 The two-layer design is the project's central safety claim: a deterministic cue
 database decides *what is wrong*, and the language model is allowed to rephrase

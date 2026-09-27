@@ -1,4 +1,4 @@
-"""FastAPI app entry — Phase E.
+"""FastAPI app entry.
 
 Run with:
     .venv\\Scripts\\python.exe -m uvicorn backend.main:app --reload --port 8000
@@ -53,7 +53,7 @@ logging.basicConfig(
 )
 
 # ---------------------------------------------------------------------------
-# Retention sweep (WP-07)
+# Retention sweep
 # ---------------------------------------------------------------------------
 # A daemon thread rather than a request hook, because a deployment with no
 # traffic is exactly the one where old clips would otherwise sit longest. Daemon

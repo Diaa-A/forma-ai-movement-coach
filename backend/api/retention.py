@@ -1,4 +1,4 @@
-"""Delete uploads and rendered artefacts after a fixed period (WP-07).
+"""Delete uploads and rendered artefacts after a fixed period.
 
 Until this landed, an accepted upload stayed on disk forever. Rejected ones were
 already cleaned up by `_discard`, which made the gap easy to miss: the failure

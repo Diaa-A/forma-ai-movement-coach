@@ -1,7 +1,7 @@
 """Consolidate the Penn Action benchmark into citable evidence for Chapter 5.
 
 The benchmark already writes `metrics.json` per action under `data/outputs/`, but
-that directory is **gitignored**, so from the repository's point of view the
+that directory is gitignored, so from the repository's point of view the
 numbers do not exist — they survive only as prose in the handoff and as pixels in
 two PNGs. A report cannot cite a figure whose only source is a summary of itself.
 
@@ -9,7 +9,7 @@ This reads the per-action metrics the benchmark produced, adds the things a
 marker will look for and the raw files do not carry, and writes one committed
 file under `report/chapter5/`.
 
-The addition that matters most is the **keypoint correspondence**. It is imported
+The addition that matters most is the keypoint correspondence. It is imported
 from `backend.evaluation.penn_action` rather than retyped, so the file records the
 mapping that was actually used rather than one written out beside it that could
 drift. That mapping contains the left/right swap which was the project's most

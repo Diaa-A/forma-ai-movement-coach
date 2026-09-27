@@ -188,7 +188,7 @@ SQUAT_POSITIVES: Dict[str, dict] = {
 # ----------------------------------------------------------------------------
 
 # Detection thresholds. Kept here (next to the cue text they fire) rather than
-# scattered. Phase D / E may move some of these to per-user calibration.
+# scattered. Per-user calibration could move some of them one day.
 # knee angle at bottom > _DEPTH_FLAG_KNEE_ANGLE => shallow. Imported from
 # squat.py above, because the overlay needs the same number to colour a shallow
 # rep and cannot import this module (squat_cues imports squat, not the reverse).

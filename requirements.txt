@@ -10,10 +10,10 @@
 # The GUI build of OpenCV, for development. The container replaces it with
 # opencv-contrib-python-headless at this same version — the same OpenCV minus
 # highgui, which nothing here uses. Kept as the development default because it is
-# what the 142 tests and the Penn Action benchmark were run against.
+# what the tests and the Penn Action benchmark were run against.
 opencv-python==4.13.0.92
 
-# Evaluation harness (Phase H) — Penn Action .mat labels. Not imported by the API
+# Evaluation harness — Penn Action .mat labels. Not imported by the API
 # (checked against sys.modules after importing backend.main), so it stays out of
 # the image.
 scipy==1.17.1
@@ -24,7 +24,7 @@ pytest==9.1.1
 # drive the app. Test-only — nothing in backend/ imports it.
 httpx2==2.9.1
 
-# Phase D voice transcription: Groq-hosted whisper-large-v3 is the default and
+# Voice transcription: Groq-hosted whisper-large-v3 is the default and
 # needs no extra install. The local fallback is optional and NOT installed by
 # default (pulls in torch ~2GB). Enable with:
 #   pip install openai-whisper

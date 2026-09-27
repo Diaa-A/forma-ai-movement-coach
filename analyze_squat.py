@@ -45,7 +45,7 @@ def _parse_args():
     p.add_argument("--min-cutoff", type=float, default=1.0)
     p.add_argument("--beta",       type=float, default=0.007)
     p.add_argument("--no-coach", action="store_true",
-                   help="skip the Phase C coaching step entirely")
+                   help="skip the coaching step entirely (analysis only)")
     p.add_argument("--dry-run-coach", action="store_true",
                    help="force the deterministic dry-run report (no LLM call)")
     p.add_argument("--voice-note", default="",
