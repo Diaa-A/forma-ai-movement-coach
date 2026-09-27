@@ -7,6 +7,8 @@ __pycache__/
 data/outputs/
 data/uploads/
 data/penn_action/
+# benchmarked once and not used by the app, so it is not worth 30MB in here
+data/models/pose_landmarker_heavy.task
 data/Penn_Action.tar.gz
 data/penn_probe.tar.gz
 data/test_videos/*.mp4
